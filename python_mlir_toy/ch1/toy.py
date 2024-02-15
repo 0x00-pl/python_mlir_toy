@@ -20,11 +20,11 @@ def main(argv=None):
     arg_parser = build_arg_parser()
     args = arg_parser.parse_args(argv)
 
-    moduleAST = None  # TODO
+    module_ast = ast.ModuleAST(ast.Location('-', 0, 0), [])
 
     arg_action = Action(args.emitAction[0])
     if arg_action == Action.Ast:
-        ast.dump(moduleAST)
+        ast.dump(module_ast)
     else:
         raise 'No action specified (parsing only?), use -emit=<action>'
 
