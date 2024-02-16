@@ -5,3 +5,6 @@ class Location:
         self.filename = filename
         self.line = line
         self.column = column
+
+    def dump(self):
+        print(f'@{self.filename}:{self.line}:{self.column}', end='')

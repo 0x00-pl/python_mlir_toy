@@ -1,12 +1,15 @@
 import enum
-from typing import Optional
+from typing import Optional, List, Union
 
 from python_mlir_toy.ch1.lexer import Location
 
 
 class VarType:
-    def __init__(self, shape: [int]):
-        self.shape = shape
+    def __init__(self, shape: List[int]):
+        self.shape: List[int] = shape
+
+    def __str__(self):
+        return f'<{", ".join(str(i) for i in self.shape)}>'
 
 
 class ExprAST:
@@ -83,7 +86,7 @@ class PrintExprAST(ExprAST):
 
 
 class PrototypeAST:
-    def __init__(self, location: Location, name: str, args: [VariableExprAST]):
+    def __init__(self, location: Location, name: str, args: List[VariableExprAST]):
         self.location = location
         self.name = name
         self.args = args
@@ -123,15 +126,117 @@ class ASTDumper:
     def __init__(self):
         self.indent = Indent()
 
-    def dump(self, module: ModuleAST):
+    def dump(self, expr: ExprAST):
+        if isinstance(expr, BinaryExprAST):
+            self.dump_binary(expr)
+        elif isinstance(expr, CallExprAST):
+            self.dump_call(expr)
+        elif isinstance(expr, LiteralExprAST):
+            self.dump_literal(expr)
+        elif isinstance(expr, NumberExprAST):
+            self.dump_number(expr)
+        elif isinstance(expr, PrintExprAST):
+            self.dump_print(expr)
+        elif isinstance(expr, ReturnExprAST):
+            self.dump_return(expr)
+        elif isinstance(expr, VarDeclExprAST):
+            self.dump_var_decl(expr)
+        elif isinstance(expr, VariableExprAST):
+            self.dump_variable(expr)
+        else:
+            print(self.indent, 'unknown expression, kind:', expr.kind)
+
+    def dump_var_type(self, var_type: VarType):
+        print(var_type, end='')
+
+    def dump_var_decl(self, expr: VarDeclExprAST):
         with self.indent:
-            self.indent.dump()
-            print('Module:')
+            print(self.indent, 'VarDecl:', expr.name, end='')
+            self.dump_var_type(expr.var_type)
+            print(expr.location)
+            self.dump(expr.init_value)
+
+    def dump_expr_list(self, expr_list: ExprASTList):
+        with self.indent:
+            print(self.indent, 'Block {')
+            for expr in expr_list:
+                self.dump(expr)
+            print(self.indent, '} //Block')
+
+    def dump_number(self, expr: NumberExprAST):
+        with self.indent:
+            print(expr.value, expr.location, end='')
+
+    @staticmethod
+    def print_literal_helper(literal: Union[NumberExprAST, LiteralExprAST]):
+        if isinstance(literal, NumberExprAST):
+            print(literal.value, end='')
+        else:
+            print(literal, '[', end='')
+            first = True
+            for value in literal.values:
+                if first:
+                    first = False
+                else:
+                    print(', ', end='')
+                ASTDumper.print_literal_helper(value)
+
+            print(']', end='')
+
+    def dump_literal(self, expr: LiteralExprAST):
+        with self.indent:
+            print(self.indent, 'Literal:', self.print_literal_helper(expr), expr.location)
+
+    def dump_variable(self, expr: VariableExprAST):
+        with self.indent:
+            print(self.indent, 'Variable:', expr.name, expr.location)
+
+    def dump_return(self, expr: ReturnExprAST):
+        with self.indent:
+            print(self.indent, 'Return')
+            if expr.expr is not None:
+                self.dump(expr.expr)
+            else:
+                with self.indent:
+                    print(self.indent, '(void)')
+
+    def dump_binary(self, expr: BinaryExprAST):
+        with self.indent:
+            print(self.indent, 'Binary:', expr.op, expr.location)
+            self.dump(expr.lhs)
+            self.dump(expr.rhs)
+
+    def dump_call(self, expr: CallExprAST):
+        with self.indent:
+            print(self.indent, 'Call:', expr.callee, '[', expr.location)
+            for arg in expr.args:
+                self.dump(arg)
+            print(self.indent, ']')
+
+    def dump_print(self, expr: PrintExprAST):
+        with self.indent:
+            print(self.indent, 'Print [', expr.location)
+            self.dump(expr.arg)
+            print(self.indent, ']')
+
+    def dump_prototype(self, proto: PrototypeAST):
+        with self.indent:
+            print(self.indent, f'Prototype: "{proto.name}"', proto.location)
+            print(self.indent, f'Params: [{", ".join(i.name for i in proto.args)}]')
+
+    def dump_function(self, func: FunctionAST):
+        with self.indent:
+            print(self.indent, 'Function:')
+            self.dump_prototype(func.proto)
+            self.dump(func.body)
+
+    def dump_module(self, module: ModuleAST):
+        with self.indent:
+            print(self.indent, 'Module:')
             for f in module.functions:
-                # f.dump()
-                print('<function>')
+                self.dump(f)
 
 
 def dump(module: ModuleAST):
     dumper = ASTDumper()
-    dumper.dump(module)
+    dumper.dump_module(module)
