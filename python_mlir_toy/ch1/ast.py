@@ -93,7 +93,7 @@ class PrototypeAST:
 
 
 class FunctionAST:
-    def __init__(self, location: Location, proto: PrototypeAST, body: ExprAST):
+    def __init__(self, location: Location, proto: PrototypeAST, body: ExprASTList):
         self.location = location
         self.proto = proto
         self.body = body
@@ -153,7 +153,7 @@ class ASTDumper:
         with self.indent:
             print(self.indent, 'VarDecl:', expr.name, end='')
             self.dump_var_type(expr.var_type)
-            print(expr.location)
+            print('', expr.location)
             self.dump(expr.init_value)
 
     def dump_expr_list(self, expr_list: ExprASTList):
@@ -172,7 +172,7 @@ class ASTDumper:
         if isinstance(literal, NumberExprAST):
             print(literal.value, end='')
         else:
-            print(literal, '[', end='')
+            print(f'<{", ".join(str(i) for i in literal.dims)}>[', end='')
             first = True
             for value in literal.values:
                 if first:
@@ -185,7 +185,9 @@ class ASTDumper:
 
     def dump_literal(self, expr: LiteralExprAST):
         with self.indent:
-            print(self.indent, 'Literal:', self.print_literal_helper(expr), expr.location)
+            print(self.indent, 'Literal: ', end='')
+            self.print_literal_helper(expr)
+            print('', expr.location)
 
     def dump_variable(self, expr: VariableExprAST):
         with self.indent:
@@ -228,13 +230,12 @@ class ASTDumper:
         with self.indent:
             print(self.indent, 'Function:')
             self.dump_prototype(func.proto)
-            self.dump(func.body)
+            self.dump_expr_list(func.body)
 
     def dump_module(self, module: ModuleAST):
-        with self.indent:
-            print(self.indent, 'Module:')
-            for f in module.functions:
-                self.dump(f)
+        print(self.indent, 'Module:')
+        for f in module.functions:
+            self.dump_function(f)
 
 
 def dump(module: ModuleAST):
