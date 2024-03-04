@@ -1,9 +1,9 @@
 import argparse
 import enum
 
-from python_mlir_toy.ch1 import ast
-from python_mlir_toy.ch1.lexer import LexerBuffer
-from python_mlir_toy.ch1.parser import Parser
+from python_mlir_toy.ch2 import ast
+from python_mlir_toy.ch2.lexer import LexerBuffer
+from python_mlir_toy.ch2.parser import Parser
 
 
 class Action(enum.Enum):
