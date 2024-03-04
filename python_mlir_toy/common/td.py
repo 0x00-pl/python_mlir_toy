@@ -1,5 +1,7 @@
 import typing
 
+from python_mlir_toy.common import location
+
 T = typing.TypeVar('T')
 
 
@@ -9,7 +11,8 @@ class Dialect:
 
 
 class Op:
-    def __init__(self, name: str):
+    def __init__(self, loc: location.Location, name: str):
+        self.location = loc
         self.name = name
         self.operands = None
         self.results = None

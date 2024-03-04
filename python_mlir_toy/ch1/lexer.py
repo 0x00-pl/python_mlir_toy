@@ -51,6 +51,9 @@ class Lexer:
         self.cur_column = 0
         self.last_char = ' '
 
+    def get_location(self):
+        return self.location.copy()
+
     def read_next_line(self):
         raise NotImplementedError()
 
