@@ -28,7 +28,7 @@ class ExprAST:
         self.location = location
 
 
-ExprASTList: [ExprAST] = list
+ExprASTList = List[ExprAST]
 
 
 class NumberExprAST(ExprAST):
@@ -82,7 +82,7 @@ class CallExprAST(ExprAST):
 class PrintExprAST(ExprAST):
     def __init__(self, location: Location, arg: ExprAST):
         super().__init__(ExprAST.ExprASTKind.Expr_Print, location)
-        self.arg = arg
+        self.content = arg
 
 
 class PrototypeAST:
@@ -218,7 +218,7 @@ class ASTDumper:
     def dump_print(self, expr: PrintExprAST):
         with self.indent:
             print(self.indent, 'Print [', expr.location)
-            self.dump(expr.arg)
+            self.dump(expr.content)
             print(self.indent, ']')
 
     def dump_prototype(self, proto: PrototypeAST):
