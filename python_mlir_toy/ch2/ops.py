@@ -21,16 +21,16 @@ class ConstantOp(ToyOp):
 
 
 class FuncOp(ToyOp, td.IsolatedFromAbove):
-    def __init__(self, loc: location.Location, name: str, function_type, block: td.Block):
+    def __init__(self, loc: location.Location, name: str, function_type: mlir_type.FunctionType, block: td.Block):
         super().__init__(loc, 'toy.func', blocks=[block])
         self.name = name
         self.function_type = function_type
 
     def get_operand_types(self):
-        return self.function_type[0]
+        return self.function_type.inputs
 
     def get_result_types(self):
-        return self.function_type[1]
+        return self.function_type.outputs
 
 
 class GenericCallOp(ToyOp):

@@ -38,6 +38,10 @@ class MlirGenImpl:
             return self.mlir_gen_binary(x)
         elif isinstance(x, ast.VariableExprAST):
             return self.mlir_gen_variable(x)
+        elif isinstance(x, ast.VarDeclExprAST):
+            return self.mlir_gen_var_decl(x)
+        elif isinstance(x, ast.PrintExprAST):
+            return self.mlir_gen_print(x)
         elif isinstance(x, ast.ReturnExprAST):
             return self.mlir_gen_return(x)
         else:
@@ -75,9 +79,9 @@ class MlirGenImpl:
             self.mlir_gen_block(func.body, block.op_list)
 
         # fixme: assume no branch
-        if block.op_list[-1].name == 'toy.return':
+        if isinstance(block.op_list[-1], ops.ReturnOp):
             result_op = block.op_list[-1]
-            func_output_types = [i.ty for i in result_op.results]
+            func_output_types = [i.ty for i in result_op.operands]
         else:
             func_output_types = []
 
@@ -88,9 +92,13 @@ class MlirGenImpl:
 
     def mlir_gen_call(self, call: ast.CallExprAST):
         loc = self.location(call.location)
-        callee = self.func_dict[call.callee]
-        inputs = [self.op_to_value(self.mlir_gen(arg)) for arg in call.args]
-        ret = ops.GenericCallOp(loc, callee, *inputs)
+        if call.callee == 'transpose':
+            permutation = [1, 0]
+            ret = ops.TransposeOp(loc, permutation, self.mlir_gen(call.args[0]))
+        else:
+            callee = self.func_dict[call.callee]
+            inputs = [self.mlir_gen(arg) for arg in call.args]
+            ret = ops.GenericCallOp(loc, callee, *inputs)
         self.insert_op(ret)
         return ret
 
@@ -154,7 +162,7 @@ class MlirGenImpl:
 
     def mlir_gen_print(self, p: ast.PrintExprAST):
         loc = self.location(p.location)
-        operand = self.op_to_value(self.mlir_gen(p.content))
+        operand = self.mlir_gen(p.content)
         ret = ops.PrintOp(loc, operand)
         self.insert_op(ret)
         return ret

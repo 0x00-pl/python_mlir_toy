@@ -1,9 +1,10 @@
 import argparse
 import enum
 
-from python_mlir_toy.ch2 import ast
-from python_mlir_toy.ch2.lexer import LexerBuffer
-from python_mlir_toy.ch2.parser import Parser
+from python_mlir_toy.ch1 import ast
+from python_mlir_toy.ch1.lexer import LexerBuffer
+from python_mlir_toy.ch1.parser import Parser
+from python_mlir_toy.ch2.mlir_gen import MlirGenImpl
 
 
 class Action(enum.Enum):
@@ -26,6 +27,15 @@ def dump_ast(args):
     ast.dump(module_ast)
 
 
+def dump_mlir(args):
+    lexer = LexerBuffer(args.input_file.name, args.input_file)
+    parser = Parser(lexer)
+    module_ast = parser.parse_module()
+    mlir_gen = MlirGenImpl()
+    mlir_module = mlir_gen.mlir_gen(module_ast)
+    print(mlir_module)
+
+
 def main(argv=None):
     arg_parser = build_arg_parser()
     args = arg_parser.parse_args(argv)
@@ -34,10 +44,10 @@ def main(argv=None):
     if arg_action == Action.Ast:
         dump_ast(args)
     elif arg_action == Action.Mlir:
-        raise NotImplementedError('MLIR generation not yet implemented')
+        dump_mlir(args)
     else:
         raise 'No action specified (parsing only?), use -emit=<action>'
 
 
 if __name__ == '__main__':
-    main(['tests/transpose.mlir', '-emit=ast', '-emit=ast'])
+    main(['tests/transpose.mlir', '-emit=mlir'])
