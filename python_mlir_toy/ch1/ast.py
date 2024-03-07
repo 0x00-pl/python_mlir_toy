@@ -2,6 +2,7 @@ import enum
 from typing import Optional, List, Union
 
 from python_mlir_toy.ch1.lexer import Location
+from python_mlir_toy.common.asm_printer import Indent
 
 
 class VarType:
@@ -103,23 +104,6 @@ class ModuleAST:
     def __init__(self, location: Location, functions: [FunctionAST]):
         self.location = location
         self.functions = functions
-
-
-class Indent:
-    def __init__(self, level=0):
-        self.level = 0
-
-    def __enter__(self):
-        self.level += 1
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.level -= 1
-
-    def __str__(self):
-        return '  ' * self.level
-
-    def dump(self):
-        print(self, end='')
 
 
 class ASTDumper:

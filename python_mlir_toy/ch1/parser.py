@@ -2,7 +2,7 @@ from typing import Optional
 
 from python_mlir_toy.ch1.ast import FunctionAST, PrototypeAST, ExprASTList, VarDeclExprAST, VarType, VariableExprAST, \
     PrintExprAST, CallExprAST, NumberExprAST, LiteralExprAST, ExprAST, BinaryExprAST, ReturnExprAST, ModuleAST
-from python_mlir_toy.ch1.lexer import Lexer, Token, Location
+from python_mlir_toy.ch1.lexer import Lexer, Token
 
 
 class Parser:
