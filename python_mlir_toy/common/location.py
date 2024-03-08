@@ -1,9 +1,14 @@
-class Location:
+from python_mlir_toy.common import serializable
+from python_mlir_toy.common.serializable import TextPrinter
+
+
+class Location(serializable.TextSerializable):
     pass
 
 
 class UnknownLocation(Location):
-    pass
+    def print(self, dst: TextPrinter):
+        dst.print('loc(unknown)')
 
 
 class FileLineColLocation(Location):
@@ -12,3 +17,5 @@ class FileLineColLocation(Location):
         self.line = line
         self.column = column
 
+    def print(self, dst: TextPrinter):
+        dst.print(f'loc({self.filename}:{self.line}:{self.column})')

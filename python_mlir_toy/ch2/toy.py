@@ -1,10 +1,12 @@
 import argparse
 import enum
+import sys
 
 from python_mlir_toy.ch1 import ast
 from python_mlir_toy.ch1.lexer import LexerBuffer
 from python_mlir_toy.ch1.parser import Parser
 from python_mlir_toy.ch2.mlir_gen import MlirGenImpl
+from python_mlir_toy.common import asm_printer
 
 
 class Action(enum.Enum):
@@ -33,7 +35,7 @@ def dump_mlir(args):
     module_ast = parser.parse_module()
     mlir_gen = MlirGenImpl()
     mlir_module = mlir_gen.mlir_gen(module_ast)
-    print(mlir_module)
+    mlir_module.dump()
 
 
 def main(argv=None):

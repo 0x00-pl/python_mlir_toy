@@ -11,7 +11,7 @@ class MlirGenImpl:
         self.symbol_table = symbol_table.SymbolTable()
         self.insert_point_list = []
 
-    def insert_op(self, op: td.Op):
+    def insert_op(self, op: mlir_op.Op):
         self.insert_point_list[-1].append(op)
         return op
 
@@ -20,7 +20,7 @@ class MlirGenImpl:
         return location.FileLineColLocation(loc.filename, loc.line, loc.column)
 
     @staticmethod
-    def op_to_value(op: td.Op) -> td.Value:
+    def op_to_value(op: mlir_op.Op) -> td.Value:
         assert isinstance(op.results, list)
         assert len(op.results) == 1
         return op.results[0]
@@ -71,11 +71,11 @@ class MlirGenImpl:
 
         func_input_types = [mlir_type.F64TensorType() for _ in func.proto.args]
 
-        block = td.Block(func_input_types)
+        block = mlir_op.Block(func_input_types)
 
         with self.symbol_table:
-            for name_ast in func.proto.args:
-                self.symbol_table.insert(name_ast.name, block.arguments[0])
+            for name_ast, argument_value in zip(func.proto.args, block.arguments):
+                self.symbol_table.insert(name_ast.name, argument_value)
             self.mlir_gen_block(func.body, block.op_list)
 
         # fixme: assume no branch

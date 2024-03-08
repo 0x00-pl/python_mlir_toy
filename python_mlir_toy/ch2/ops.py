@@ -1,14 +1,9 @@
 from typing import List, Optional
 
-from python_mlir_toy.common import td, location, mlir_type
+from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, scoped_text_printer, tools
 
 
-# class ToyDialect(td.Dialect):
-#     def __init__(self, name: str):
-#         super().__init__(name)
-
-
-class ToyOp(td.Op):
+class ToyOp(mlir_op.Op):
     def __init__(self, loc: location.Location, name: str, operands=None, result_types=None, blocks=None):
         super().__init__(loc, name, operands, result_types, blocks)
 
@@ -19,11 +14,15 @@ class ConstantOp(ToyOp):
         self.shape = shape
         self.values = values
 
+    def print_content(self, dst: serializable.TextPrinter):
+        dst.print(f'dense<{self.values}>')
+        self.location.print(dst)
+
 
 class FuncOp(ToyOp, td.IsolatedFromAbove):
-    def __init__(self, loc: location.Location, name: str, function_type: mlir_type.FunctionType, block: td.Block):
+    def __init__(self, loc: location.Location, function_name: str, function_type: mlir_type.FunctionType, block: mlir_op.Block):
         super().__init__(loc, 'toy.func', blocks=[block])
-        self.name = name
+        self.function_name = function_name
         self.function_type = function_type
 
     def get_operand_types(self):
@@ -31,6 +30,34 @@ class FuncOp(ToyOp, td.IsolatedFromAbove):
 
     def get_result_types(self):
         return self.function_type.outputs
+
+    def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):
+        dst.print(self.function_name)
+        argument_dict = {}
+        with dst.indent:
+            dst.print('(', end='')
+            for arg_value in tools.with_sep(self.blocks[0].arguments, lambda: dst.print(',')):
+                arg_name = dst.next_unused_symbol('%arg')
+                dst.insert_value_name(arg_value, arg_name)
+                argument_dict[arg_name] = arg_value
+                dst.print(arg_name, ':', sep='', end='')
+                arg_value.ty.print(dst)
+            dst.print(')')
+        dst.print('->')
+        if len(self.function_type.outputs) == 1:
+            self.function_type.outputs[0].print(dst)
+            dst.print()
+        else:
+            dst.print('(', end='')
+            for result_value in tools.with_sep(self.function_type.outputs, lambda: dst.print(',')):
+                result_value.ty.print(dst)
+                dst.print()
+            dst.print(')')
+
+        with dst.indent:
+            for name, value in argument_dict.items():
+                dst.insert_value_name(value, name)
+            self.blocks[0].print(dst)
 
 
 class GenericCallOp(ToyOp):
@@ -79,3 +106,6 @@ class TransposeOp(ToyOp):
         else:
             result_type = mlir_type.F64TensorType()
         super().__init__(loc, 'toy.transpose', operands=[operand], result_types=[result_type])
+
+    def print_content(self, dst: serializable.TextPrinter):
+        pass

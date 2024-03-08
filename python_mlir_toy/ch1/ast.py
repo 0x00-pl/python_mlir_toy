@@ -2,7 +2,7 @@ import enum
 from typing import Optional, List, Union
 
 from python_mlir_toy.ch1.lexer import Location
-from python_mlir_toy.common.asm_printer import Indent
+from python_mlir_toy.common.indent import Indent
 
 
 class VarType:
