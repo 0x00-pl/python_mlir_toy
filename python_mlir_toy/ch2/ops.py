@@ -20,7 +20,8 @@ class ConstantOp(ToyOp):
 
 
 class FuncOp(ToyOp, td.IsolatedFromAbove):
-    def __init__(self, loc: location.Location, function_name: str, function_type: mlir_type.FunctionType, block: mlir_op.Block):
+    def __init__(self, loc: location.Location, function_name: str, function_type: mlir_type.FunctionType,
+                 block: mlir_op.Block):
         super().__init__(loc, 'toy.func', blocks=[block])
         self.function_name = function_name
         self.function_type = function_type
@@ -66,6 +67,9 @@ class GenericCallOp(ToyOp):
         # todo: verify callee input types
         assert len(inputs) == len(callee.get_operand_types())
 
+    def print_content(self, dst: serializable.TextPrinter):
+        pass
+
 
 class AddOp(ToyOp):
     def __init__(self, loc: location.Location, lhs: td.Value, rhs: td.Value):
@@ -80,22 +84,33 @@ class MulOp(ToyOp):
         assert mlir_type.F64TensorType() <= lhs.ty
         assert mlir_type.F64TensorType() <= rhs.ty
 
+    def print_content(self, dst: serializable.TextPrinter):
+        pass
+
 
 class PrintOp(ToyOp):
     def __init__(self, loc: location.Location, operand: td.Value):
         super().__init__(loc, 'toy.print', operands=[operand])
         assert mlir_type.F64TensorType() <= operand.ty
 
+    def print_content(self, dst: serializable.TextPrinter):
+        pass
+
 
 class ReshapeOp(ToyOp):
     def __init__(self, loc: location.Location, shape: List[int], operand: td.Value):
-        super().__init__(loc, 'toy.reshape', operands=[operand],
-                         result_types=[mlir_type.RankedF64TensorType(shape)])
+        super().__init__(loc, 'toy.reshape', operands=[operand], result_types=[mlir_type.RankedF64TensorType(shape)])
+
+    def print_content(self, dst: serializable.TextPrinter):
+        pass
 
 
 class ReturnOp(ToyOp, td.HasParent[FuncOp]):
     def __init__(self, loc: location.Location, operand: Optional[td.Value] = None):
         super().__init__(loc, 'toy.return', operands=([operand]) if operand is not None else [])
+
+    def print_content(self, dst: serializable.TextPrinter):
+        pass
 
 
 class TransposeOp(ToyOp):

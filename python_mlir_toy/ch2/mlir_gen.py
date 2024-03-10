@@ -156,7 +156,7 @@ class MlirGenImpl:
             return var_decl_op
         else:
             shape = decl.var_type.shape
-            reshape_op = ops.ReshapeOp(loc, shape, var_decl_op)
+            reshape_op = ops.ReshapeOp(loc, shape, self.op_to_value(var_decl_op))
             self.insert_op(reshape_op)
             return reshape_op
 
