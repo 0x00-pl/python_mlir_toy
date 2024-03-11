@@ -180,7 +180,7 @@ class Parser:
 
         type_list = []
         while self.lexer.get_cur_token() == Token.Number:
-            type_list.append(self.lexer.number_value)
+            type_list.append(int(self.lexer.number_value))
             self.lexer.consume(Token.Number)
             if self.lexer.get_cur_token() != Token.Comma:
                 break
@@ -238,7 +238,7 @@ class Parser:
         while self.lexer.get_cur_token() != Token.ParenthesesClose:
             if self.lexer.get_cur_token() != Token.Identifier:
                 return self.parse_error('argument name', 'in prototype arguments')
-            args.append(VariableExprAST(self.lexer.location, self.lexer.identifier))
+            args.append(VariableExprAST(self.lexer.location.copy(), self.lexer.identifier))
             self.lexer.consume(Token.Identifier)
 
             if self.lexer.get_cur_token() not in (Token.Comma, Token.ParenthesesClose):

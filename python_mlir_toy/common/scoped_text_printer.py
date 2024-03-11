@@ -33,9 +33,11 @@ class ScopedTextPrinter(serializable.TextPrinter):
         self.value_name_dict[-1][value] = name
 
     def __enter__(self):
+        self.indent.__enter__()
         self.scope.__enter__()
         self.value_name_dict.append({})
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.indent.__exit__(exc_type, exc_val, exc_tb)
         self.scope.__exit__(exc_type, exc_val, exc_tb)
         self.value_name_dict.pop()

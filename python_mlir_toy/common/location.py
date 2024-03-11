@@ -8,7 +8,7 @@ class Location(serializable.TextSerializable):
 
 class UnknownLocation(Location):
     def print(self, dst: TextPrinter):
-        dst.print('loc(unknown)')
+        dst.print('loc(unknown)', end='')
 
 
 class FileLineColLocation(Location):
@@ -18,4 +18,4 @@ class FileLineColLocation(Location):
         self.column = column
 
     def print(self, dst: TextPrinter):
-        dst.print(f'loc({self.filename}:{self.line}:{self.column})')
+        dst.print(f'loc("{self.filename}":{self.line}:{self.column})', end='')

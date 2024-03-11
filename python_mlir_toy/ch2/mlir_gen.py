@@ -63,6 +63,9 @@ class MlirGenImpl:
         self.insert_point_list.append(op_list)
         for expr in block:
             self.mlir_gen(expr)
+        if not isinstance(op_list[-1], ops.ReturnOp):
+            ret_op = ops.ReturnOp(location.UnknownLocation())
+            self.insert_op(ret_op)
         self.insert_point_list.pop(-1)
         return op_list
 
@@ -72,10 +75,13 @@ class MlirGenImpl:
         func_input_types = [mlir_type.F64TensorType() for _ in func.proto.args]
 
         block = mlir_op.Block(func_input_types)
+        arg_name_list = []
 
         with self.symbol_table:
             for name_ast, argument_value in zip(func.proto.args, block.arguments):
+                assert isinstance(name_ast, ast.VariableExprAST)
                 self.symbol_table.insert(name_ast.name, argument_value)
+                arg_name_list.append((name_ast.name, self.location(name_ast.location)))
             self.mlir_gen_block(func.body, block.op_list)
 
         # fixme: assume no branch
@@ -86,7 +92,7 @@ class MlirGenImpl:
             func_output_types = []
 
         func_type = mlir_type.FunctionType(func_input_types, func_output_types)
-        ret = ops.FuncOp(loc, func.proto.name, func_type, block)
+        ret = ops.FuncOp(loc, func.proto.name, arg_name_list, func_type, block)
         self.func_dict[func.proto.name] = ret
         return ret
 
