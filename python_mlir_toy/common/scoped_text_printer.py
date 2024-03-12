@@ -1,16 +1,15 @@
 import sys
 import typing
 
-from python_mlir_toy.common import serializable, symbol_table, td
-from python_mlir_toy.common.indent import Indent
+from python_mlir_toy.common import serializable, scoped, td
 
 
-class ScopedTextPrinter(serializable.TextPrinter):
+class ScopedTextPrinter(serializable.TextPrinter, scoped.Scoped):
     def __init__(self, sep=' ', end=' ', file: typing.TextIO = sys.stdout):
         super().__init__(sep, end, file)
-        self.indent = Indent()
-        self.scope = symbol_table.SymbolTable()
-        self.value_name_dict: typing.List[typing.Dict[td.Value, str]] = [{}]
+        self.indent = scoped.Indent()
+        self.symbol_table_scope = scoped.SymbolTable[td.Value]()
+        self.value_name_scope = scoped.KVScoped[td.Value, str]()
 
     def print_ident(self):
         self.print(str(self.indent), end='')
@@ -20,24 +19,21 @@ class ScopedTextPrinter(serializable.TextPrinter):
         self.print(f'"{escaped}"')
 
     def lookup_value_name(self, value: td.Value):
-        for scope in reversed(self.value_name_dict):
-            if value in scope:
-                return scope[value]
-        return None
+        return self.value_name_scope.lookup(value)
 
     def next_unused_symbol(self, prefix: str = '%'):
-        return self.scope.next_unused_symbol(prefix)
+        return self.symbol_table_scope.next_unused_symbol(prefix)
 
     def insert_value_name(self, value: td.Value, name: str):
-        self.scope.insert(name, value)
-        self.value_name_dict[-1][value] = name
+        self.symbol_table_scope.insert(name, value)
+        self.value_name_scope.insert(value, name)
 
     def __enter__(self):
         self.indent.__enter__()
-        self.scope.__enter__()
-        self.value_name_dict.append({})
+        self.symbol_table_scope.__enter__()
+        self.value_name_scope.__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.value_name_scope.__exit__(exc_type, exc_val, exc_tb)
+        self.symbol_table_scope.__exit__(exc_type, exc_val, exc_tb)
         self.indent.__exit__(exc_type, exc_val, exc_tb)
-        self.scope.__exit__(exc_type, exc_val, exc_tb)
-        self.value_name_dict.pop()

@@ -2,7 +2,7 @@ import enum
 from typing import Optional, List, Union
 
 from python_mlir_toy.ch1.lexer import Location
-from python_mlir_toy.common.indent import Indent
+from python_mlir_toy.common import scoped
 
 
 class VarType:
@@ -108,7 +108,7 @@ class ModuleAST:
 
 class ASTDumper:
     def __init__(self):
-        self.indent = Indent()
+        self.indent = scoped.Indent()
 
     def dump(self, expr: ExprAST):
         if isinstance(expr, BinaryExprAST):
@@ -163,6 +163,7 @@ class ASTDumper:
                     first = False
                 else:
                     print(', ', end='')
+                assert isinstance(value, (NumberExprAST, LiteralExprAST))
                 ASTDumper.print_literal_helper(value)
 
             print(']', end='')

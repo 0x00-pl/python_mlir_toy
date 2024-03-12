@@ -2,13 +2,13 @@ import typing
 
 from python_mlir_toy.ch1 import ast, lexer
 from python_mlir_toy.ch2 import ops
-from python_mlir_toy.common import location, mlir_type, td, symbol_table, mlir_op
+from python_mlir_toy.common import location, mlir_type, td, mlir_op, scoped
 
 
 class MlirGenImpl:
     def __init__(self):
         self.func_dict: typing.Dict[str, ops.FuncOp] = {}
-        self.symbol_table = symbol_table.SymbolTable()
+        self.symbol_table = scoped.SymbolTable[td.Value]()
         self.insert_point_list = []
 
     def insert_op(self, op: mlir_op.Op):
