@@ -150,5 +150,8 @@ class TextSerializable(Serializable):
         self.print(printer)
         return file.getvalue()
 
+    def parse(self, src: TextParser):
+        raise NotImplementedError
+
     def consume(self, src: TextParser) -> bool:
         raise NotImplementedError

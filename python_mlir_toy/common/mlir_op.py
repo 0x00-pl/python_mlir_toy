@@ -2,6 +2,47 @@ import sys
 import typing
 
 from python_mlir_toy.common import location, td, serializable, scoped_text_printer, mlir_type, tools
+from python_mlir_toy.common.serializable import TextPrinter, TextParser
+
+
+class AttrDictFormat(serializable.TextSerializable):
+    def __init__(self, **kwargs):
+        self.data = kwargs
+
+    def print(self, dst: TextPrinter):
+        for k, v in tools.with_sep(self.data.items(), lambda: dst.print(',')):
+            dst.print(f'{k} = ')
+            v.print(dst)
+
+    def parse(self, src: TextParser):
+        raise NotImplementedError('TODO')
+
+
+class OperandNameFormat(serializable.TextSerializable):
+    def __init__(self, op: 'Op', idx: int):
+        self.op = op
+        self.idx = idx
+
+    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
+        operand_value = self.op.operands[self.idx]
+        operand_name = dst.lookup_value_name(operand_value)
+        dst.print(operand_name, end='')
+
+    def parse(self, src: TextParser):
+        raise NotImplementedError('TODO')
+
+
+class OperandTypeFormat(serializable.TextSerializable):
+    def __init__(self, op: 'Op', idx: int):
+        self.op = op
+        self.idx = idx
+
+    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
+        operand_value = self.op.operands[self.idx]
+        operand_value.ty.print(dst)
+
+    def parse(self, src: TextParser):
+        raise NotImplementedError('TODO')
 
 
 class Op(serializable.TextSerializable):
@@ -13,7 +54,43 @@ class Op(serializable.TextSerializable):
         self.results = [td.Value(ty) for ty in result_types] if result_types else []
         self.blocks = blocks
 
+    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
+        _ = self
+        return None
+
+    def attr_dict_format(self):
+        _ = self
+        return AttrDictFormat()
+
+    def operand_name_format(self, idx):
+        return OperandNameFormat(self, idx)
+
+    def operand_type_format(self, idx):
+        return OperandTypeFormat(self, idx)
+
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
+        if self.get_assembly_format() is not None:
+            self.print_assembly_format(dst)
+        else:
+            self.print_normal_format(dst)
+
+    def print_assembly_format(self, dst: scoped_text_printer.ScopedTextPrinter):
+        self.print_return_values(dst)
+        dst.print(self.name)
+
+        assembly_format = self.get_assembly_format()
+        assert isinstance(assembly_format, list)
+        for item in assembly_format:
+            if isinstance(item, str):
+                dst.print(item, end='')
+            elif isinstance(item, serializable.TextSerializable):
+                item.print(dst)
+            else:
+                raise ValueError(f'Unknown assembly format item: {item}')
+        self.print_loc(dst)
+        dst.print_newline()
+
+    def print_normal_format(self, dst: scoped_text_printer.ScopedTextPrinter):
         self.print_return_values(dst)
         dst.print(self.name)
         self.print_arguments(dst)

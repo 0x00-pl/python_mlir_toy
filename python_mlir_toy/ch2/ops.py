@@ -1,3 +1,4 @@
+import typing
 from typing import List, Optional, Tuple
 
 from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, scoped_text_printer, tools
@@ -151,16 +152,11 @@ class ReturnOp(ToyOp, td.HasParent[FuncOp]):
     def __init__(self, loc: location.Location, operand: Optional[td.Value] = None):
         super().__init__(loc, 'toy.return', operands=([operand]) if operand is not None else [])
 
-    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        self.print_return_values(dst)
-        dst.print(self.name)
-        if len(self.operands) > 0:
-            dst.print(dst.lookup_value_name(self.operands[0]))
-            dst.print(':')
-            self.operands[0].ty.print(dst)
-            dst.print()
-        self.print_loc(dst)
-        dst.print_newline()
+    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
+        if len(self.operands) == 0:
+            return [self.attr_dict_format()]
+        else:
+            return [self.operand_name_format(0), ' : ', self.operand_type_format(0), self.attr_dict_format()]
 
 
 class TransposeOp(ToyOp):
