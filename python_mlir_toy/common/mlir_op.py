@@ -55,8 +55,10 @@ class Op(serializable.TextSerializable):
         self.blocks = blocks
 
     def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
-        _ = self
-        return None
+        if len(self.results) == 0:
+            return [self.operands_format()]
+        else:
+            return [self.operands_format(), ' : ', self.results_format()]
 
     def attr_dict_format(self):
         _ = self
@@ -68,11 +70,20 @@ class Op(serializable.TextSerializable):
     def operand_type_format(self, idx):
         return OperandTypeFormat(self, idx)
 
-    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        if self.get_assembly_format() is not None:
-            self.print_assembly_format(dst)
+    def operands_format(self, detail=False, show_type=False):
+        if detail:
+            def print_func(dst: scoped_text_printer.ScopedTextPrinter):
+                self.print_arguments_detail(dst, print_type=show_type)
         else:
-            self.print_normal_format(dst)
+            print_func = self.print_arguments
+
+        return print_func, NotImplemented
+
+    def results_format(self):
+        return self.print_results, NotImplemented
+
+    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
+        self.print_assembly_format(dst)
 
     def print_assembly_format(self, dst: scoped_text_printer.ScopedTextPrinter):
         self.print_return_values(dst)
@@ -85,20 +96,12 @@ class Op(serializable.TextSerializable):
                 dst.print(item, end='')
             elif isinstance(item, serializable.TextSerializable):
                 item.print(dst)
+            elif isinstance(item, tuple) and len(item) == 2:
+                # (printer, parser)
+                assert isinstance(item[0], typing.Callable)
+                item[0](dst)
             else:
                 raise ValueError(f'Unknown assembly format item: {item}')
-        self.print_loc(dst)
-        dst.print_newline()
-
-    def print_normal_format(self, dst: scoped_text_printer.ScopedTextPrinter):
-        self.print_return_values(dst)
-        dst.print(self.name)
-        self.print_arguments(dst)
-        if len(self.results) > 0:
-            dst.print(' : ', end='')
-            self.print_results(dst)
-        self.print_content(dst)
-        dst.print()
         self.print_loc(dst)
         dst.print_newline()
 
@@ -138,9 +141,6 @@ class Op(serializable.TextSerializable):
         else:
             dst.print('none', end='')
 
-    def print_content(self, dst: serializable.TextPrinter):
-        raise NotImplementedError(f'{self.name}:{type(self)} does not implement print_content()')
-
     def print_loc(self, dst: serializable.TextPrinter):
         self.location.print(dst)
 
@@ -165,13 +165,18 @@ class ModuleOp(Op):
         self.module_name = module_name
         self.func_dict = func_dict
 
+    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
+        assembly_format = super().get_assembly_format()
+        assembly_format.append((self.print_content, NotImplemented))
+        return assembly_format
+
     def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):
         dst.print('{', end='\n')
         with dst:
             for func in self.func_dict.values():
                 dst.print_ident()
                 func.print(dst)
-        dst.print('}', end='')
+        dst.print('}')
 
     def dump(self):
         printer = scoped_text_printer.ScopedTextPrinter(file=sys.stdout)

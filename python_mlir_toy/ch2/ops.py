@@ -46,6 +46,11 @@ class FuncOp(ToyOp, td.IsolatedFromAbove):
     def get_result_types(self):
         return self.function_type.outputs
 
+    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
+        assembly_format = super().get_assembly_format()
+        assembly_format.append((self.print_content, NotImplemented))
+        return assembly_format
+
     def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):
         dst.print(self.function_name, end='')
         argument_dict = {}
@@ -85,7 +90,7 @@ class FuncOp(ToyOp, td.IsolatedFromAbove):
                 dst.insert_value_name(value, name)
             self.blocks[0].print(dst)
         dst.print_ident()
-        dst.print('}', end='')
+        dst.print('}')
 
 
 class GenericCallOp(ToyOp):
