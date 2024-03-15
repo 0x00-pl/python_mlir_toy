@@ -58,7 +58,7 @@ class Op(serializable.TextSerializable):
         if len(self.results) == 0:
             return [self.operands_format()]
         else:
-            return [self.operands_format(), ' : ', self.results_format()]
+            return [self.operands_format(), ' : ', self.result_types_format()]
 
     def attr_dict_format(self):
         _ = self
@@ -79,14 +79,16 @@ class Op(serializable.TextSerializable):
 
         return print_func, NotImplemented
 
-    def results_format(self):
-        return self.print_results, NotImplemented
+    def result_types_format(self):
+        return self.print_result_types, NotImplemented
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
         self.print_assembly_format(dst)
 
     def print_assembly_format(self, dst: scoped_text_printer.ScopedTextPrinter):
-        self.print_return_values(dst)
+        if len(self.results) != 0:
+            self.print_return_values(dst)
+            dst.print(' = ')
         dst.print(self.name)
 
         assembly_format = self.get_assembly_format()
@@ -102,17 +104,16 @@ class Op(serializable.TextSerializable):
                 item[0](dst)
             else:
                 raise ValueError(f'Unknown assembly format item: {item}')
+
+        dst.print(dst.sep, end='')
         self.print_loc(dst)
         dst.print_newline()
 
     def print_return_values(self, dst: scoped_text_printer.ScopedTextPrinter):
-        if len(self.results) != 0:
-            for result_value in tools.with_sep(self.results, lambda: dst.print(',')):
-                result_name = dst.next_unused_symbol('%')
-                dst.insert_value_name(result_value, result_name)
-                dst.print(result_name)
-
-            dst.print('=')
+        for result_value in tools.with_sep(self.results, lambda: dst.print(',')):
+            result_name = dst.next_unused_symbol('%')
+            dst.insert_value_name(result_value, result_name)
+            dst.print(result_name, end='')
 
     def print_arguments_detail(self, dst: scoped_text_printer.ScopedTextPrinter, print_type: bool = False):
         if len(self.operands) > 0:
@@ -130,7 +131,7 @@ class Op(serializable.TextSerializable):
             operand_name = dst.lookup_value_name(operand_value)
             dst.print(operand_name, end='')
 
-    def print_results(self, dst: serializable.TextPrinter):
+    def print_result_types(self, dst: serializable.TextPrinter):
         if len(self.results) > 1:
             dst.print('(', end='')
             for result_value in tools.with_sep(self.results, lambda: dst.print(',')):

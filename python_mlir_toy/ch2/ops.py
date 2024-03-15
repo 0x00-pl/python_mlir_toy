@@ -2,6 +2,7 @@ import typing
 from typing import List, Optional, Tuple
 
 from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, scoped_text_printer, tools
+from python_mlir_toy.common.serializable import TextParser
 
 
 class ToyOp(mlir_op.Op):
@@ -16,18 +17,18 @@ class ConstantOp(ToyOp):
         self.shape = shape
         self.values = values
 
-    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        self.print_return_values(dst)
-        dst.print(self.name)
-        dst.print(f'dense<{self.values}> :')
-        self.results[0].ty.print(dst)
-        dst.print()
-        self.print_loc(dst)
-        dst.print_newline()
+    def get_assembly_format(self):
+        assembly_format = [self.literal_format(), ' : ', self.result_types_format()]
+        return assembly_format
 
-    def print_content(self, dst: serializable.TextPrinter):
-        dst.print(f'dense<{self.values}>')
-        self.location.print(dst)
+    def literal_format(self):
+        def printer(dst: serializable.TextPrinter):
+            dst.print(f'dense<{self.values}>', end='')
+
+        def parser(src: serializable.TextParser):
+            raise NotImplementedError
+
+        return printer, parser
 
 
 class FuncOp(ToyOp, td.IsolatedFromAbove):
@@ -100,15 +101,28 @@ class GenericCallOp(ToyOp):
         # todo: verify callee input types
         assert len(inputs) == len(callee.get_operand_types())
 
-    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        self.print_return_values(dst)
-        dst.print(self.name)
-        dst.print('@', self.callee.function_name, sep='', end='')
-        self.print_arguments_detail(dst)
-        dst.print(' : ', end='')
-        self.callee.function_type.print(dst)
-        self.print_loc(dst)
-        dst.print_newline()
+    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
+        assembly_format = ['@', self.function_name_format(), self.operands_format(detail=True, show_type=False), ' : ',
+                           self.function_type_format()]
+        return assembly_format
+
+    def function_name_format(self):
+        def printer(dst: serializable.TextPrinter):
+            dst.print(self.callee.function_name)
+
+        def parser(src: TextParser):
+            raise NotImplementedError
+
+        return printer, parser
+
+    def function_type_format(self):
+        def printer(dst: serializable.TextPrinter):
+            self.callee.function_type.print(dst)
+
+        def parser(src: TextParser):
+            raise NotImplementedError
+
+        return printer, parser
 
 
 class AddOp(ToyOp):
@@ -124,9 +138,6 @@ class MulOp(ToyOp):
         assert mlir_type.F64TensorType() <= lhs.ty
         assert mlir_type.F64TensorType() <= rhs.ty
 
-    def print_content(self, dst: serializable.TextPrinter):
-        pass
-
 
 class PrintOp(ToyOp):
     def __init__(self, loc: location.Location, operand: td.Value):
@@ -141,16 +152,9 @@ class ReshapeOp(ToyOp):
     def __init__(self, loc: location.Location, shape: List[int], operand: td.Value):
         super().__init__(loc, 'toy.reshape', operands=[operand], result_types=[mlir_type.RankedF64TensorType(shape)])
 
-    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        self.print_return_values(dst)
-        dst.print(self.name, end='')
-        dst.print(f'({dst.lookup_value_name(self.operands[0])} :')
-        self.operands[0].ty.print(dst)
-        dst.print(') to ', end='')
-        self.results[0].ty.print(dst)
-        dst.print()
-        self.print_loc(dst)
-        dst.print_newline()
+    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
+        return ['(', self.operand_name_format(0), ' : ', self.operand_type_format(0), ')', self.attr_dict_format(),
+                ' to ', self.result_types_format()]
 
 
 class ReturnOp(ToyOp, td.HasParent[FuncOp]):
@@ -173,13 +177,6 @@ class TransposeOp(ToyOp):
             result_type = mlir_type.F64TensorType()
         super().__init__(loc, 'toy.transpose', operands=[operand], result_types=[result_type])
 
-    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        self.print_return_values(dst)
-        dst.print(self.name, end='')
-        dst.print(f'({dst.lookup_value_name(self.operands[0])} :')
-        self.operands[0].ty.print(dst)
-        dst.print(') to ', end='')
-        self.results[0].ty.print(dst)
-        dst.print()
-        self.print_loc(dst)
-        dst.print_newline()
+    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
+        return ['(', self.operand_name_format(0), ' : ', self.operand_type_format(0), ')', self.attr_dict_format(),
+                ' to ', self.result_types_format()]

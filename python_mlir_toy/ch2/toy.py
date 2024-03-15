@@ -52,4 +52,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    main(['tests/transpose.mlir', '-emit=mlir'])
+    main(['tests/transpose.toy', '-emit=mlir'])
