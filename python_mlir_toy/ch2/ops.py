@@ -18,7 +18,7 @@ class ConstantOp(ToyOp):
         self.values = values
 
     def get_assembly_format(self):
-        assembly_format = [self.literal_format(), ' : ', self.result_types_format()]
+        assembly_format = [' ', self.literal_format(), ' : ', self.result_types_format()]
         return assembly_format
 
     def literal_format(self):
@@ -91,7 +91,7 @@ class FuncOp(ToyOp, td.IsolatedFromAbove):
                 dst.insert_value_name(value, name)
             self.blocks[0].print(dst)
         dst.print_ident()
-        dst.print('}')
+        dst.print('}', end='')
 
 
 class GenericCallOp(ToyOp):

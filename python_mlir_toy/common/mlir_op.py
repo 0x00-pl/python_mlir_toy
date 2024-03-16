@@ -56,9 +56,9 @@ class Op(serializable.TextSerializable):
 
     def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
         if len(self.results) == 0:
-            return [self.operands_format()]
+            return [' ', self.operands_format()]
         else:
-            return [self.operands_format(), ' : ', self.result_types_format()]
+            return [' ', self.operands_format(), ' : ', self.result_types_format()]
 
     def attr_dict_format(self):
         _ = self
@@ -88,8 +88,8 @@ class Op(serializable.TextSerializable):
     def print_assembly_format(self, dst: scoped_text_printer.ScopedTextPrinter):
         if len(self.results) != 0:
             self.print_return_values(dst)
-            dst.print(' = ')
-        dst.print(self.name)
+            dst.print(' = ', end='')
+        dst.print(self.name, end='')
 
         assembly_format = self.get_assembly_format()
         assert isinstance(assembly_format, list)
@@ -177,7 +177,7 @@ class ModuleOp(Op):
             for func in self.func_dict.values():
                 dst.print_ident()
                 func.print(dst)
-        dst.print('}')
+        dst.print('}', end='')
 
     def dump(self):
         printer = scoped_text_printer.ScopedTextPrinter(file=sys.stdout)
