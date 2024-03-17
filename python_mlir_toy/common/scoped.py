@@ -2,11 +2,16 @@ import typing
 
 
 class Scoped:
+    def __init__(self, scoped_content: typing.List['Scoped'] = None):
+        self.scoped_content = scoped_content if scoped_content is not None else []
+
     def __enter__(self):
-        raise NotImplementedError(f'{type(self)} does not implement __enter__()')
+        for content in self.scoped_content:
+            content.__enter__()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        raise NotImplementedError(f'{type(self)} does not implement __exit__()')
+        for content in reversed(self.scoped_content):
+            content.__exit__(exc_type, exc_val, exc_tb)
 
 
 class Indent(Scoped):
@@ -33,6 +38,7 @@ V = typing.TypeVar('V')
 
 class KVScoped(Scoped, typing.Generic[K, V]):
     def __init__(self):
+        super().__init__()
         self.stack: typing.List[typing.Dict[K, V]] = [{}]
 
     def insert(self, key: K, value: V):

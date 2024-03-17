@@ -128,7 +128,7 @@ class Lexer:
 
 
 class LexerBuffer(Lexer):
-    def __init__(self, filename: str, buffer):
+    def __init__(self, buffer, filename: str):
         super().__init__(filename)
         self.line_buffer = ''
         self.lines = buffer.readlines()

@@ -22,7 +22,7 @@ def main(argv=None):
     arg_parser = build_arg_parser()
     args = arg_parser.parse_args(argv)
 
-    lexer = LexerBuffer(args.input_file.name, args.input_file)
+    lexer = LexerBuffer(args.input_file, args.input_file.name)
     parser = Parser(lexer)
     module_ast = parser.parse_module()
 

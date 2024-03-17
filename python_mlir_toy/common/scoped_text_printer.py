@@ -6,10 +6,11 @@ from python_mlir_toy.common import serializable, scoped, td
 
 class ScopedTextPrinter(serializable.TextPrinter, scoped.Scoped):
     def __init__(self, sep=' ', end=' ', file: typing.TextIO = sys.stdout):
-        super().__init__(sep, end, file)
+        serializable.TextPrinter.__init__(self, sep, end, file)
         self.indent = scoped.Indent()
         self.symbol_table_scope = scoped.SymbolTable[td.Value]()
         self.value_name_scope = scoped.KVScoped[td.Value, str]()
+        scoped.Scoped.__init__(self, [self.indent, self.symbol_table_scope, self.value_name_scope])
 
     def print_ident(self):
         self.print(str(self.indent), end='')
@@ -27,13 +28,3 @@ class ScopedTextPrinter(serializable.TextPrinter, scoped.Scoped):
     def insert_value_name(self, value: td.Value, name: str):
         self.symbol_table_scope.insert(name, value)
         self.value_name_scope.insert(value, name)
-
-    def __enter__(self):
-        self.indent.__enter__()
-        self.symbol_table_scope.__enter__()
-        self.value_name_scope.__enter__()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.value_name_scope.__exit__(exc_type, exc_val, exc_tb)
-        self.symbol_table_scope.__exit__(exc_type, exc_val, exc_tb)
-        self.indent.__exit__(exc_type, exc_val, exc_tb)

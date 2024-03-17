@@ -1,12 +1,10 @@
 import argparse
 import enum
-import sys
 
 from python_mlir_toy.ch1 import ast
 from python_mlir_toy.ch1.lexer import LexerBuffer
 from python_mlir_toy.ch1.parser import Parser
 from python_mlir_toy.ch2.mlir_gen import MlirGenImpl
-from python_mlir_toy.common import asm_printer
 
 
 class Action(enum.Enum):
@@ -23,19 +21,24 @@ def build_arg_parser():
 
 
 def dump_ast(args):
-    lexer = LexerBuffer(args.input_file.name, args.input_file)
+    lexer = LexerBuffer(args.input_file, args.input_file.name)
     parser = Parser(lexer)
     module_ast = parser.parse_module()
     ast.dump(module_ast)
 
 
 def dump_mlir(args):
-    lexer = LexerBuffer(args.input_file.name, args.input_file)
-    parser = Parser(lexer)
-    module_ast = parser.parse_module()
-    mlir_gen = MlirGenImpl()
-    mlir_module = mlir_gen.mlir_gen(module_ast)
-    mlir_module.dump()
+    if args.input_file.name.endswith('.mlir'):
+        parser = mlir_parser.MlirParser(args.input_file, args.input_file.name)
+        mlir_module = parser.parse()
+        mlir_module.dump()
+    else:
+        lexer = LexerBuffer(args.input_file, args.input_file.name)
+        parser = Parser(lexer)
+        module_ast = parser.parse_module()
+        mlir_gen = MlirGenImpl()
+        mlir_module = mlir_gen.mlir_gen(module_ast)
+        mlir_module.dump()
 
 
 def main(argv=None):
