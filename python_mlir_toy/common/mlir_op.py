@@ -1,7 +1,7 @@
 import sys
 import typing
 
-from python_mlir_toy.common import location, td, serializable, scoped_text_printer, mlir_type, tools
+from python_mlir_toy.common import location, td, serializable, scoped_text_printer, mlir_type, tools, scoped_text_parser
 from python_mlir_toy.common.serializable import TextPrinter, TextParser
 
 
@@ -14,7 +14,8 @@ class AttrDictFormat(serializable.TextSerializable):
             dst.print(f'{k} = ')
             v.print(dst)
 
-    def parse(self, src: TextParser):
+    @staticmethod
+    def parse(src: TextParser):
         raise NotImplementedError('TODO')
 
 
@@ -28,7 +29,8 @@ class OperandNameFormat(serializable.TextSerializable):
         operand_name = dst.lookup_value_name(operand_value)
         dst.print(operand_name, end='')
 
-    def parse(self, src: TextParser):
+    @staticmethod
+    def parse(src: TextParser):
         raise NotImplementedError('TODO')
 
 
@@ -41,18 +43,43 @@ class OperandTypeFormat(serializable.TextSerializable):
         operand_value = self.op.operands[self.idx]
         operand_value.ty.print(dst)
 
-    def parse(self, src: TextParser):
+    @staticmethod
+    def parse(src: TextParser):
         raise NotImplementedError('TODO')
 
 
+def register_cls(name: str):
+    def inner(cls: typing.Type[serializable.TextSerializable]):
+        Op.register_op_cls(name, cls)
+        return cls
+    return inner
+
+
 class Op(serializable.TextSerializable):
-    def __init__(self, loc: location.Location, name: str, operands: typing.List[td.Value] = None,
+    op_name: str = None
+    op_type_dict: typing.Dict[str, typing.Type[serializable.TextSerializable]] = {}
+
+    @staticmethod
+    def register_op_cls(name: str, op_type: typing.Type[serializable.TextSerializable]):
+        assert name not in Op.op_type_dict
+        Op.op_type_dict[name] = op_type
+
+    @staticmethod
+    def get_op_cls(name: str):
+        assert name in Op.op_type_dict
+        return Op.op_type_dict[name]
+
+    def __init_subclass__(cls):
+        if cls.op_name is not None:
+            Op.register_op_cls(cls.op_name, cls)
+
+    def __init__(self, loc: location.Location, operands: typing.List[td.Value] = None,
                  result_types: typing.List[mlir_type.Type] = None, blocks: typing.List['Block'] = None):
         self.location = loc
-        self.name = name
         self.operands = operands if operands else []
         self.results = [td.Value(ty) for ty in result_types] if result_types else []
         self.blocks = blocks
+
 
     def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
         if len(self.results) == 0:
@@ -83,14 +110,18 @@ class Op(serializable.TextSerializable):
         return self.print_result_types, NotImplemented
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        self.print_assembly_format(dst)
-
-    def print_assembly_format(self, dst: scoped_text_printer.ScopedTextPrinter):
         if len(self.results) != 0:
             self.print_return_values(dst)
             dst.print(' = ', end='')
         dst.print(self.name, end='')
 
+        self.print_assembly_format(dst)
+
+        dst.print(dst.sep, end='')
+        self.print_loc(dst)
+        dst.print_newline()
+
+    def print_assembly_format(self, dst: scoped_text_printer.ScopedTextPrinter):
         assembly_format = self.get_assembly_format()
         assert isinstance(assembly_format, list)
         for item in assembly_format:
@@ -104,10 +135,6 @@ class Op(serializable.TextSerializable):
                 item[0](dst)
             else:
                 raise ValueError(f'Unknown assembly format item: {item}')
-
-        dst.print(dst.sep, end='')
-        self.print_loc(dst)
-        dst.print_newline()
 
     def print_return_values(self, dst: scoped_text_printer.ScopedTextPrinter):
         for result_value in tools.with_sep(self.results, lambda: dst.print(',')):
@@ -145,6 +172,40 @@ class Op(serializable.TextSerializable):
     def print_loc(self, dst: serializable.TextPrinter):
         self.location.print(dst)
 
+    @staticmethod
+    def parse(src: scoped_text_parser.ScopedTextParser):
+        return_name = None
+        if src.last_token() == '%':
+            src.process_token()
+            return_name = '%' + src.last_token()
+            src.process_token(check_kind=serializable.TokenKind.Identifier)
+            src.process_token('=')
+
+        op_cls_name = src.last_token()
+        src.process_token(check_kind=serializable.TokenKind.Identifier)
+        op_cls = scoped_text_parser.get_registered_op(op_cls_name)
+        value = op_cls.parse_assembly_format(src)
+
+        src.define_var(return_name, value)
+
+    @classmethod
+    def parse_assembly_format(cls, src: scoped_text_parser.ScopedTextParser):
+        assembly_format = cls.get_assembly_format()
+        assert isinstance(assembly_format, list)
+        for item in assembly_format:
+            if isinstance(item, str):
+                item = item.strip()
+                src.process_token(item)
+                return item
+            elif isinstance(item, serializable.TextSerializable):
+                return item.parse(src)
+            elif isinstance(item, tuple) and len(item) == 2:
+                # (printer, parser)
+                assert isinstance(item[1], typing.Callable)
+                return item[0](src)
+            else:
+                raise ValueError(f'Unknown assembly format item: {item}')
+
 
 class Block(serializable.TextSerializable):
     def __init__(self, input_types=None):
@@ -161,8 +222,10 @@ class Block(serializable.TextSerializable):
 
 
 class ModuleOp(Op):
+    op_name = 'module'
+
     def __init__(self, loc: location.Location, module_name: str, func_dict: typing.Dict[str, Op]):
-        super().__init__(loc, 'module')
+        super().__init__(loc)
         self.module_name = module_name
         self.func_dict = func_dict
 

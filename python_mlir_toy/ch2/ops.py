@@ -6,14 +6,16 @@ from python_mlir_toy.common.serializable import TextParser
 
 
 class ToyOp(mlir_op.Op):
-    def __init__(self, loc: location.Location, name: str, operands=None, result_types=None, blocks=None):
-        super().__init__(loc, name, operands, result_types, blocks)
+    def __init__(self, loc: location.Location, operands=None, result_types=None, blocks=None):
+        super().__init__(loc, operands, result_types, blocks)
 
 
 class ConstantOp(ToyOp):
+    op_name = 'toy.constant'
+
     def __init__(self, loc: location.Location, shape: List[int], values: List[float]):
         result_type = mlir_type.F64TensorType() if len(shape) == 0 else mlir_type.RankedF64TensorType(shape)
-        super().__init__(loc, 'toy.constant', result_types=[result_type])
+        super().__init__(loc, result_types=[result_type])
         self.shape = shape
         self.values = values
 
@@ -32,10 +34,12 @@ class ConstantOp(ToyOp):
 
 
 class FuncOp(ToyOp, td.IsolatedFromAbove):
+    op_name = 'toy.func'
+
     def __init__(self, loc: location.Location, function_name: str,
                  arg_name_list: List[Tuple[str, location.Location] | str], function_type: mlir_type.FunctionType,
                  block: mlir_op.Block):
-        super().__init__(loc, 'toy.func', blocks=[block])
+        super().__init__(loc, blocks=[block])
         self.function_name = function_name
         self.function_type = function_type
         self.arg_name_list = arg_name_list
@@ -95,8 +99,10 @@ class FuncOp(ToyOp, td.IsolatedFromAbove):
 
 
 class GenericCallOp(ToyOp):
+    op_name = 'toy.generic_call'
+
     def __init__(self, loc: location.Location, callee: FuncOp, *inputs: td.Value):
-        super().__init__(loc, 'toy.generic_call', operands=list(inputs), result_types=callee.get_result_types())
+        super().__init__(loc, operands=list(inputs), result_types=callee.get_result_types())
         self.callee = callee
         # todo: verify callee input types
         assert len(inputs) == len(callee.get_operand_types())
@@ -126,22 +132,28 @@ class GenericCallOp(ToyOp):
 
 
 class AddOp(ToyOp):
+    op_name = 'toy.add'
+
     def __init__(self, loc: location.Location, lhs: td.Value, rhs: td.Value):
-        super().__init__(loc, 'toy.add', operands=[lhs, rhs], result_types=[mlir_type.F64TensorType()])
+        super().__init__(loc, operands=[lhs, rhs], result_types=[mlir_type.F64TensorType()])
         assert mlir_type.F64TensorType() <= lhs.ty
         assert mlir_type.F64TensorType() <= rhs.ty
 
 
 class MulOp(ToyOp):
+    op_name = 'toy.mul'
+
     def __init__(self, loc: location.Location, lhs: td.Value, rhs: td.Value):
-        super().__init__(loc, 'toy.mul', operands=[lhs, rhs], result_types=[mlir_type.F64TensorType()])
+        super().__init__(loc, operands=[lhs, rhs], result_types=[mlir_type.F64TensorType()])
         assert mlir_type.F64TensorType() <= lhs.ty
         assert mlir_type.F64TensorType() <= rhs.ty
 
 
 class PrintOp(ToyOp):
+    op_name = 'toy.print'
+
     def __init__(self, loc: location.Location, operand: td.Value):
-        super().__init__(loc, 'toy.print', operands=[operand])
+        super().__init__(loc, operands=[operand])
         assert mlir_type.F64TensorType() <= operand.ty
 
     def print_content(self, dst: serializable.TextPrinter):
@@ -149,8 +161,10 @@ class PrintOp(ToyOp):
 
 
 class ReshapeOp(ToyOp):
+    op_name = 'toy.reshape'
+
     def __init__(self, loc: location.Location, shape: List[int], operand: td.Value):
-        super().__init__(loc, 'toy.reshape', operands=[operand], result_types=[mlir_type.RankedF64TensorType(shape)])
+        super().__init__(loc, operands=[operand], result_types=[mlir_type.RankedF64TensorType(shape)])
 
     def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
         return ['(', self.operand_name_format(0), ' : ', self.operand_type_format(0), ')', self.attr_dict_format(),
@@ -158,8 +172,10 @@ class ReshapeOp(ToyOp):
 
 
 class ReturnOp(ToyOp, td.HasParent[FuncOp]):
+    op_name = 'toy.return'
+
     def __init__(self, loc: location.Location, operand: Optional[td.Value] = None):
-        super().__init__(loc, 'toy.return', operands=([operand]) if operand is not None else [])
+        super().__init__(loc, operands=([operand]) if operand is not None else [])
 
     def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
         if len(self.operands) == 0:
@@ -169,13 +185,15 @@ class ReturnOp(ToyOp, td.HasParent[FuncOp]):
 
 
 class TransposeOp(ToyOp):
+    op_name = 'toy.transpose'
+
     def __init__(self, loc: location.Location, permutation: List[int], operand: td.Value):
         if isinstance(operand.ty, mlir_type.RankedTensorType):
             shape = operand.ty.shape
             result_type = mlir_type.RankedF64TensorType([shape[i] for i in permutation])
         else:
             result_type = mlir_type.F64TensorType()
-        super().__init__(loc, 'toy.transpose', operands=[operand], result_types=[result_type])
+        super().__init__(loc, operands=[operand], result_types=[result_type])
 
     def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
         return ['(', self.operand_name_format(0), ' : ', self.operand_type_format(0), ')', self.attr_dict_format(),

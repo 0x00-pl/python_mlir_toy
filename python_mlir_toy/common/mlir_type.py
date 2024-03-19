@@ -2,7 +2,7 @@ import io
 import typing
 
 from python_mlir_toy.common import serializable, tools
-from python_mlir_toy.common.serializable import TextPrinter
+from python_mlir_toy.common.serializable import TextPrinter, TextParser
 
 
 class Type(serializable.TextSerializable):
@@ -16,6 +16,11 @@ class Type(serializable.TextSerializable):
 class NoneType(Type):
     def print(self, dst: TextPrinter):
         dst.print('none', end='')
+
+    @staticmethod
+    def parse(src: TextParser):
+        src.process_token('none')
+        return None
 
 
 def print_dialect_symbol(dst: TextPrinter, prefix: str, dialect_name: str, symbol_name: str):

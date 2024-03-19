@@ -5,6 +5,7 @@ from python_mlir_toy.ch1 import ast
 from python_mlir_toy.ch1.lexer import LexerBuffer
 from python_mlir_toy.ch1.parser import Parser
 from python_mlir_toy.ch2.mlir_gen import MlirGenImpl
+from python_mlir_toy.common import scoped_text_parser, mlir_op
 
 
 class Action(enum.Enum):
@@ -29,8 +30,8 @@ def dump_ast(args):
 
 def dump_mlir(args):
     if args.input_file.name.endswith('.mlir'):
-        parser = mlir_parser.MlirParser(args.input_file, args.input_file.name)
-        mlir_module = parser.parse()
+        parser = scoped_text_parser.ScopedTextParser(args.input_file, args.input_file.name)
+        mlir_module = mlir_op.ModuleOp.parse(parser)
         mlir_module.dump()
     else:
         lexer = LexerBuffer(args.input_file, args.input_file.name)
@@ -55,4 +56,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    main(['tests/transpose.toy', '-emit=mlir'])
+    main(['tests/transpose.mlir', '-emit=mlir'])
