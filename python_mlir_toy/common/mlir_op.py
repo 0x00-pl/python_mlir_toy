@@ -48,16 +48,75 @@ class OperandTypeFormat(serializable.TextSerializable):
         raise NotImplementedError('TODO')
 
 
-def register_cls(name: str):
-    def inner(cls: typing.Type[serializable.TextSerializable]):
-        Op.register_op_cls(name, cls)
-        return cls
-    return inner
+class OpOperandsFormat:
+    @staticmethod
+    def print(op: 'Op', dst: scoped_text_printer.ScopedTextPrinter):
+        for operand in tools.with_sep(op.operands, lambda: dst.print(', ', end='')):
+            operand_name = dst.lookup_value_name(operand)
+            dst.print(operand_name, end='')
+
+    @staticmethod
+    def parse(src: scoped_text_parser.ScopedTextParser):
+        assert src.last_token_kind() == serializable.TokenKind.Identifier
+        operand_name = src.last_token()
+        src.process_token()
+        operand_value = src.lookup_var(operand_name)
+        operands = [operand_value]
+        while src.last_token() == ',':
+            src.process_token()
+            operand_name = src.last_token()
+            operand_value = src.lookup_var(operand_name)
+            operands.append(operand_value)
+
+        def set_operands(op: Op):
+            op.operands = operands
+
+        return set_operands
+
+
+class OpResultTypeFormat:
+    @staticmethod
+    def print(op: 'Op', dst: scoped_text_printer.ScopedTextPrinter):
+        if len(op.results) > 1:
+            dst.print('(', end='')
+            for result_value in tools.with_sep(op.results, lambda: dst.print(',')):
+                result_value.ty.print(dst)
+            dst.print(')', end='')
+        elif len(op.results) == 1:
+            op.results[0].ty.print(dst)
+        else:
+            dst.print('none', end='')
+
+    @staticmethod
+    def parse(src: scoped_text_parser.ScopedTextParser):
+        result_types = []
+        if src.last_token() == '(':
+            src.process_token()
+            ty_name = src.last_token()  # todo: parse type
+            src.process_token()
+            result_types.append(ty_name)
+            while src.last_token() == ',':
+                src.process_token()
+                ty_name = src.last_token()  # todo: parse type
+                src.process_token()
+                result_types.append(ty_name)
+            src.process_token(')')
+        else:
+            ty_name = src.last_token()  # todo: parse type
+            src.process_token()
+            result_types.append(ty_name)
+
+        def set_result_type(op: Op):
+            assert all(value.ty <= ty for ty, value in zip(result_types, op.results))
+            op.results = [td.Value(ty) for ty in result_types] if result_types else []
+
+        return set_result_type
 
 
 class Op(serializable.TextSerializable):
     op_name: str = None
     op_type_dict: typing.Dict[str, typing.Type[serializable.TextSerializable]] = {}
+    assembly_format = []
 
     @staticmethod
     def register_op_cls(name: str, op_type: typing.Type[serializable.TextSerializable]):
@@ -80,6 +139,9 @@ class Op(serializable.TextSerializable):
         self.results = [td.Value(ty) for ty in result_types] if result_types else []
         self.blocks = blocks
 
+    # @classmethod
+    # def build(cls, loc, operands=None, result_types=None, blocks=None):
+    #     return cls(loc=loc, operands=operands, result_types=result_types, blocks=blocks)
 
     def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
         if len(self.results) == 0:
@@ -172,8 +234,8 @@ class Op(serializable.TextSerializable):
     def print_loc(self, dst: serializable.TextPrinter):
         self.location.print(dst)
 
-    @staticmethod
-    def parse(src: scoped_text_parser.ScopedTextParser):
+    @classmethod
+    def parse(cls, src: scoped_text_parser.ScopedTextParser):
         return_name = None
         if src.last_token() == '%':
             src.process_token()

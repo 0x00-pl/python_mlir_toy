@@ -6,21 +6,33 @@ from python_mlir_toy.common.serializable import TextPrinter, TextParser
 
 
 class Type(serializable.TextSerializable):
+    name = None
+    type_dict = {}
+
+    def __init_subclass__(cls, **kwargs):
+        if cls.name is not None:
+            Type.type_dict[cls.name] = cls
+
     def __le__(self, other):
         return isinstance(other, type(self))
 
     def __eq__(self, other):
         return other <= self <= other
 
+    def print(self, dst: TextPrinter):
+        if self.name is not None:
+            dst.print(self.name, end='')
+        else:
+            dst.print('unknown_type', end='')
+
+    @classmethod
+    def parse(cls, src: TextParser):
+        src.process_token(cls.name)
+        return cls()
+
 
 class NoneType(Type):
-    def print(self, dst: TextPrinter):
-        dst.print('none', end='')
-
-    @staticmethod
-    def parse(src: TextParser):
-        src.process_token('none')
-        return None
+    name = 'none'
 
 
 def print_dialect_symbol(dst: TextPrinter, prefix: str, dialect_name: str, symbol_name: str):
@@ -37,11 +49,12 @@ class OpaqueType(Type):
 
 
 class IndexType(Type):
-    def print(self, dst: TextPrinter):
-        dst.print('index', end='')
+    name = 'index'
 
 
 class IntegerType(Type):
+    name = 'integer'
+
     def __init__(self, bits: int, signed: bool):
         self.bits = bits
         self.signed = signed
@@ -52,15 +65,22 @@ class IntegerType(Type):
     def print(self, dst: TextPrinter):
         dst.print(f'{"s" if self.signed else "u"}{self.bits}i', end='')
 
+    @classmethod
+    def parse(cls, src: TextParser):
+        assert src.last_token_kind() == serializable.TokenKind.Identifier
+        type_str: str = src.last_token()
+        src.process_token()
+        signed = not type_str.startswith('u')
+        bits = int(type_str.strip('sui'))
+        return cls(bits=bits, signed=signed)
+
 
 class Float32Type(Type):
-    def print(self, dst: TextPrinter):
-        dst.print('f32', end='')
+    name = 'f32'
 
 
 class Float64Type(Type):
-    def print(self, dst: TextPrinter):
-        dst.print('f64', end='')
+    name = 'f64'
 
 
 class ComplexType(Type):

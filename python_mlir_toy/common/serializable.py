@@ -250,7 +250,7 @@ class TextSerializable(Serializable):
         self.print(printer)
         return file.getvalue()
 
-    @staticmethod
-    def parse(src: TextParser):
+    @classmethod
+    def parse(cls, src: TextParser):
         raise NotImplementedError
 

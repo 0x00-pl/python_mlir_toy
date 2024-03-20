@@ -4,18 +4,17 @@ import typing
 from python_mlir_toy.common import serializable, scoped, td
 
 
-
-
 class ScopedTextParser(serializable.TextParser, scoped.Scoped):
     def __init__(self, file: typing.TextIO = sys.stdin, filename: str = 'unknown'):
         serializable.TextParser.__init__(self, file, filename)
         self.symbol_table = scoped.SymbolTable[td.Value]()
-        self.value_name = scoped.KVScoped[td.Value, str]()
-        scoped.Scoped.__init__(self, [self.symbol_table, self.value_name])
+        scoped.Scoped.__init__(self, [self.symbol_table])
 
     def define_var(self, name: str, value: td.Value):
         self.symbol_table.insert(name, value)
-        self.value_name.insert(value, name)
+
+    def lookup_var(self, name: str):
+        return self.symbol_table.lookup(name)
 
 
 # def parse_op(src: ScopedTextParser) -> serializable.TextSerializable:
