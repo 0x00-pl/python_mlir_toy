@@ -101,9 +101,9 @@ class Lexer:
             self.identifier = identifier
             return self.cur_token
 
-        if self.last_char.isnumeric() or self.last_char == '.':
+        if self.last_char.isdigit() or self.last_char == '.':
             number_str = ''
-            while self.last_char.isnumeric() or self.last_char == '.':
+            while self.last_char.isdigit() or self.last_char == '.':
                 number_str += self.last_char
                 self.last_char = self.get_next_char()
             self.number_value = float(number_str)

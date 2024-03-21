@@ -1,4 +1,3 @@
-import io
 import typing
 
 from python_mlir_toy.common import serializable, tools
@@ -7,7 +6,7 @@ from python_mlir_toy.common.serializable import TextPrinter, TextParser
 
 class Type(serializable.TextSerializable):
     name = None
-    type_dict = {}
+    type_dict: typing.Dict[str, typing.Type['Type']] = {}
 
     def __init_subclass__(cls, **kwargs):
         if cls.name is not None:
@@ -52,9 +51,7 @@ class IndexType(Type):
     name = 'index'
 
 
-class IntegerType(Type):
-    name = 'integer'
-
+class IntType(Type):
     def __init__(self, bits: int, signed: bool):
         self.bits = bits
         self.signed = signed
@@ -84,6 +81,8 @@ class Float64Type(Type):
 
 
 class ComplexType(Type):
+    name = 'complex'
+
     def __init__(self, element_type: Type):
         self.element_type = element_type
 
@@ -95,8 +94,18 @@ class ComplexType(Type):
         self.element_type.print(dst)
         dst.print('>', end='')
 
+    @classmethod
+    def parse(cls, src: TextParser):
+        src.process_token('complex')
+        src.process_token('<')
+        element_type = parse_type(src)
+        src.process_token('>')
+        return cls(element_type)
+
 
 class VectorType(Type):
+    name = 'vector'
+
     def __init__(self, element_type: Type, dims: typing.List[int], is_scalable_dims: typing.List[bool] = None):
         self.element_type = element_type
         self.dims = dims
@@ -117,6 +126,38 @@ class VectorType(Type):
         dst.print(f'x', end='')
         self.element_type.print(dst)
         dst.print('>', end='')
+
+    @classmethod
+    def parse(cls, src: TextParser):
+        src.process_token('vector')
+        src.process_space()
+        dims = []
+        is_scalable_dims = []
+        element_type = None
+        src.process_char('<')
+        while src.last_char() != '>':
+            src.process_char()
+            if src.last_char() == '[':
+                src.process_char()
+                num_str = ''
+                while src.last_char().isdigit():
+                    num_str += src.last_char()
+                    src.process_char()
+                src.process_char(']')
+                dims.append(int(num_str))
+                is_scalable_dims.append(True)
+            elif src.last_char().isdigit():
+                num_str = ''
+                while src.last_char().isdigit():
+                    num_str += src.last_char()
+                    src.process_char()
+                dims.append(int(num_str))
+                is_scalable_dims.append(False)
+            else:
+                element_type = parse_type(src)
+                break
+        src.process_token('>')
+        return cls(element_type, dims, is_scalable_dims)
 
 
 class TensorType(Type):
@@ -151,8 +192,40 @@ class RankedTensorType(TensorType):
         self.element_type.print(dst)
         dst.print('>', end='')
 
+    @classmethod
+    def parse(cls, src: TextParser):
+        src.process_token('tensor')
+        src.process_space()
+        src.process_token('<')
+        if src.last_char() == '*':
+            src.process_char('*')
+            src.process_char('x')
+            element_type = parse_type(src)
+            src.process_token('>')
+            return TensorType(element_type)
+
+        shape = []
+        element_type = None
+        while src.last_char() != '>':
+            if src.last_char() == 'x':
+                src.process_char()
+            dim_str = ''
+            if src.last_char().isdigit():
+                while src.last_char().isdigit():
+                    dim_str += src.last_char()
+                    src.process_char()
+                shape.append(int(dim_str))
+            else:
+                element_type = parse_type(src)
+                assert src.last_token() == '>'
+        src.process_token('>')
+        assert element_type is not None
+        return cls(element_type, shape)
+
 
 class TupleType(Type):
+    name = 'tuple'
+
     def __init__(self, types: typing.List[Type]):
         self.types = types
 
@@ -164,6 +237,23 @@ class TupleType(Type):
         for input_ty in tools.with_sep(self.types, lambda: dst.print(', ')):
             input_ty.print(dst)
         dst.print('>')
+
+    @classmethod
+    def parse(cls, src: TextParser):
+        src.process_token('tuple')
+        src.process_space()
+        src.process_token('<')
+        src.process_token(')')
+        types = []
+        while src.last_char() != ')':
+            if src.last_char() == ',':
+                src.process_char()
+                src.process_space()
+            sub_type = parse_type(src)
+            types.append(sub_type)
+        src.process_token(')')
+        src.process_token('>')
+        return cls(types)
 
 
 class FunctionType(Type):
@@ -185,6 +275,42 @@ class FunctionType(Type):
             for output_ty in tools.with_sep(self.outputs, lambda: dst.print(',')):
                 output_ty.print(dst)
             dst.print(')')
+
+
+def parse_type_list(src: TextParser, sep: str = ','):
+    if src.last_token() == '(':
+        src.process_token()
+        type_list = [parse_type(src)]
+        while src.last_token() != ')':
+            if src.last_token() == sep:
+                src.process_token()
+            type_list.append(parse_type(src))
+        src.process_token(')')
+    else:
+        type_list = [parse_type(src)]
+    return type_list
+
+
+def parse_type(src: TextParser):
+    src.process_space()
+    type_name: str = src.last_token()
+    if type_name == 'unknown_type':
+        src.process_token()
+        return None
+    elif type_name[0] in 'sui' and 'i' in type_name and type_name.lstrip('sui').isdigit():
+        src.process_token()
+        return IntType(int(type_name.lstrip('sui')), type_name[0] != 'u')
+    elif type_name == '(':
+        # function type
+        arg_type = parse_type_list(src)
+        src.process_token('-')
+        src.process_token('>')
+        result_type = parse_type_list(src)
+        return FunctionType(arg_type, result_type)
+    else:
+        assert type_name in Type.type_dict
+        cls = Type.type_dict[type_name]
+        return cls.parse(src)
 
 
 def F64TensorType():

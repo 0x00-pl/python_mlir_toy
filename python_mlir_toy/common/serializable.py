@@ -190,7 +190,7 @@ class TextParser:
                     self.process_char()
                 self._last_token, self._last_token_kind = identifier, TokenKind.Identifier
                 return
-            elif self.last_char().isnumeric():
+            elif self.last_char().isdigit():
                 number_str = ''
                 while self._number_pattern.match(number_str + self.last_char()) is not None:
                     number_str += self.last_char()
