@@ -254,3 +254,14 @@ class TextSerializable(Serializable):
     def parse(cls, src: TextParser):
         raise NotImplementedError
 
+
+class Empty(TextSerializable):
+    def print(self, dst: TextPrinter):
+        pass
+
+    @classmethod
+    def parse(cls, src: TextParser):
+        pass
+
+
+empty = Empty()

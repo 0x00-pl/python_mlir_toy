@@ -1,7 +1,7 @@
 import typing
 from typing import List, Optional, Tuple
 
-from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, scoped_text_printer, tools
+from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, scoped_text_printer, tools, formater
 from python_mlir_toy.common.serializable import TextParser
 
 
@@ -19,8 +19,8 @@ class ConstantOp(ToyOp):
         self.shape = shape
         self.values = values
 
-    def get_assembly_format(self):
-        assembly_format = [' ', self.literal_format(), ' : ', self.result_types_format()]
+    def get_assembly_format(cls):
+        assembly_format = [' ', cls.literal_format(), ' : ', cls.result_types_format()]
         return assembly_format
 
     def literal_format(self):
@@ -31,6 +31,8 @@ class ConstantOp(ToyOp):
             raise NotImplementedError
 
         return printer, parser
+
+
 
 
 class FuncOp(ToyOp, td.IsolatedFromAbove):
@@ -51,9 +53,9 @@ class FuncOp(ToyOp, td.IsolatedFromAbove):
     def get_result_types(self):
         return self.function_type.outputs
 
-    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
+    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
         assembly_format = super().get_assembly_format()
-        assembly_format.append((self.print_content, NotImplemented))
+        assembly_format.append((cls.print_content, NotImplemented))
         return assembly_format
 
     def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):
@@ -107,9 +109,9 @@ class GenericCallOp(ToyOp):
         # todo: verify callee input types
         assert len(inputs) == len(callee.get_operand_types())
 
-    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
-        assembly_format = ['@', self.function_name_format(), self.operands_format(detail=True, show_type=False), ' : ',
-                           self.function_type_format()]
+    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
+        assembly_format = ['@', cls.function_name_format(), cls.operands_format(detail=True, show_type=False), ' : ',
+                           cls.function_type_format()]
         return assembly_format
 
     def function_name_format(self):
@@ -166,9 +168,9 @@ class ReshapeOp(ToyOp):
     def __init__(self, loc: location.Location, shape: List[int], operand: td.Value):
         super().__init__(loc, operands=[operand], result_types=[mlir_type.RankedF64TensorType(shape)])
 
-    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
-        return ['(', self.operand_name_format(0), ' : ', self.operand_type_format(0), ')', self.attr_dict_format(),
-                ' to ', self.result_types_format()]
+    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
+        return ['(', cls.operand_name_format(0), ' : ', cls.operand_type_format(0), ')', cls.attr_dict_format(),
+                ' to ', cls.result_types_format()]
 
 
 class ReturnOp(ToyOp, td.HasParent[FuncOp]):
@@ -177,11 +179,11 @@ class ReturnOp(ToyOp, td.HasParent[FuncOp]):
     def __init__(self, loc: location.Location, operand: Optional[td.Value] = None):
         super().__init__(loc, operands=([operand]) if operand is not None else [])
 
-    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
-        if len(self.operands) == 0:
-            return [self.attr_dict_format()]
+    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
+        if len(cls.operands) == 0:
+            return [cls.attr_dict_format()]
         else:
-            return [self.operand_name_format(0), ' : ', self.operand_type_format(0), self.attr_dict_format()]
+            return [cls.operand_name_format(0), ' : ', cls.operand_type_format(0), cls.attr_dict_format()]
 
 
 class TransposeOp(ToyOp):
@@ -195,6 +197,6 @@ class TransposeOp(ToyOp):
             result_type = mlir_type.F64TensorType()
         super().__init__(loc, operands=[operand], result_types=[result_type])
 
-    def get_assembly_format(self) -> typing.Optional[typing.List[typing.Any]]:
-        return ['(', self.operand_name_format(0), ' : ', self.operand_type_format(0), ')', self.attr_dict_format(),
-                ' to ', self.result_types_format()]
+    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
+        return ['(', cls.operand_name_format(0), ' : ', cls.operand_type_format(0), ')', cls.attr_dict_format(),
+                ' to ', cls.result_types_format()]
