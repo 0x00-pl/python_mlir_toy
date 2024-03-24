@@ -302,15 +302,23 @@ def parse_type(src: TextParser):
         return IntType(int(type_name.lstrip('sui')), type_name[0] != 'u')
     elif type_name == '(':
         # function type
-        arg_type = parse_type_list(src)
+        arg_types = parse_type_list(src)
         src.process_token('-')
         src.process_token('>')
-        result_type = parse_type_list(src)
-        return FunctionType(arg_type, result_type)
+        result_types = parse_type_list(src)
+        return FunctionType(arg_types, result_types)
     else:
         assert type_name in Type.type_dict
         cls = Type.type_dict[type_name]
         return cls.parse(src)
+
+
+def parse_function_type(src: TextParser):
+    arg_types = parse_type_list(src)
+    src.process_token('-')
+    src.process_token('>')
+    result_types = parse_type_list(src)
+    return FunctionType(arg_types, result_types)
 
 
 def F64TensorType():
