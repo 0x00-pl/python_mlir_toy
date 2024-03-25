@@ -39,14 +39,13 @@ class TypeListFormat(formater.Format):
 
 
 class OpFormat(formater.Format):
-    def __init__(self, op_cls):
+    def __init__(self):
         self.operands_format = formater.RepeatFormat(formater.StrFormat(), ', ')
         self.results_format = formater.OptionalFormat(
             formater.ListFormat([formater.ConstantStrFormat(' : '), TypeListFormat(parentheses_required=False)]),
             (lambda result_type_list: len(result_type_list) > 0),
             ':'
         )
-        self.op_cls: typing.Type[Op] = op_cls
 
     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
         assert isinstance(obj, Op)
@@ -56,13 +55,24 @@ class OpFormat(formater.Format):
         self.results_format.print(result_type_list, dst)
 
     def parse(self, src: scoped_text_parser.ScopedTextParser):
-        loc = location.FileLineColLocation(*src.last_location())
-        operand_names = self.operands_format.parse(src)
-        operands = [src.lookup_var(operand_name) for operand_name in operand_names]
-        result_types = self.results_format.parse(src)
-        return self.op_cls.build(loc, operands, result_types, None)
+        raise NotImplementedError('don\'t know how to parse unspecified Op.')
+        # loc = location.FileLineColLocation(*src.last_location())
+        # operand_names = self.operands_format.parse(src)
+        # operands = [src.lookup_var(operand_name) for operand_name in operand_names]
+        # result_types = self.results_format.parse(src)
+        # return Op.build(loc, operands, result_types, None)
 
 
+class AnyOpFormat(formater.Format):
+    def print(self, obj: 'Op', dst: scoped_text_printer.ScopedTextPrinter):
+        dst.print(obj.op_name)
+        obj.print(dst)
+
+    def parse(self, src: scoped_text_parser.ScopedTextParser):
+        op_name = src.last_token()
+        src.process_token()
+        op_cls = Op.get_op_cls(op_name)
+        return op_cls.parse(src)
 
 
 #
@@ -171,9 +181,9 @@ class Op(serializable.TextSerializable):
         Op.op_type_dict[name] = op_type
 
     @staticmethod
-    def get_op_cls(name: str):
-        assert name in Op.op_type_dict
-        return Op.op_type_dict[name]
+    def get_op_cls(op_name: str):
+        assert op_name in Op.op_type_dict
+        return Op.op_type_dict[op_name]
 
     def __init_subclass__(cls):
         if cls.op_name is not None:
@@ -193,8 +203,8 @@ class Op(serializable.TextSerializable):
 
     @classmethod
     def get_assembly_format(cls) -> formater.Format:
-    #     return OpFormat(cls)
-    #
+        return OpFormat(cls)
+
     # def attr_dict_format(self):
     #     _ = self
     #     return AttrDictFormat()
@@ -231,6 +241,7 @@ class Op(serializable.TextSerializable):
 
     def print_assembly_format(self, dst: scoped_text_printer.ScopedTextPrinter):
         assembly_format = self.get_assembly_format()
+        assembly_format.print(self, dst)
         # assert isinstance(assembly_format, list)
         # for item in assembly_format:
         #     if isinstance(item, str):
@@ -299,20 +310,22 @@ class Op(serializable.TextSerializable):
     @classmethod
     def parse_assembly_format(cls, src: scoped_text_parser.ScopedTextParser):
         assembly_format = cls.get_assembly_format()
-        assert isinstance(assembly_format, list)
-        for item in assembly_format:
-            if isinstance(item, str):
-                item = item.strip()
-                src.process_token(item)
-                return item
-            elif isinstance(item, serializable.TextSerializable):
-                return item.parse(src)
-            elif isinstance(item, tuple) and len(item) == 2:
-                # (printer, parser)
-                assert isinstance(item[1], typing.Callable)
-                return item[0](src)
-            else:
-                raise ValueError(f'Unknown assembly format item: {item}')
+        return assembly_format.parse(src)
+
+        # assert isinstance(assembly_format, list)
+        # for item in assembly_format:
+        #     if isinstance(item, str):
+        #         item = item.strip()
+        #         src.process_token(item)
+        #         return item
+        #     elif isinstance(item, serializable.TextSerializable):
+        #         return item.parse(src)
+        #     elif isinstance(item, tuple) and len(item) == 2:
+        #         # (printer, parser)
+        #         assert isinstance(item[1], typing.Callable)
+        #         return item[0](src)
+        #     else:
+        #         raise ValueError(f'Unknown assembly format item: {item}')
 
 
 class Block(serializable.TextSerializable):
@@ -329,6 +342,23 @@ class Block(serializable.TextSerializable):
             op.print(dst)
 
 
+class FunctionDefineFormat(OpFormat):
+    def __init__(self):
+        super().__init__()
+        self.function_name_format = formater.StrFormat()
+        self.function_operand_format = formater.ListFormat([
+            formater.StrFormat(), formater.ConstantStrFormat(' : '), TypeFormat()
+        ])
+        self.function_operands_format = formater.RepeatFormat(self.function_operand_format, ', ')
+
+
+    def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
+        pass
+
+    def parse(self, src: scoped_text_parser.ScopedTextParser):
+        pass
+
+
 class ModuleOp(Op):
     op_name = 'module'
 
@@ -337,7 +367,8 @@ class ModuleOp(Op):
         self.module_name = module_name
         self.func_dict = func_dict
 
-    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
+    @classmethod
+    def get_assembly_format(cls) -> formater.Format:
         assembly_format = super().get_assembly_format()
         assembly_format.append((cls.print_content, NotImplemented))
         return assembly_format
