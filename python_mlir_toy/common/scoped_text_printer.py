@@ -19,7 +19,7 @@ class ScopedTextPrinter(serializable.TextPrinter, scoped.Scoped):
         escaped = string.replace('\\', '\\\\').replace('"', '\\"')
         self.print(f'"{escaped}"')
 
-    def lookup_value_name(self, value: td.Value):
+    def lookup_value_name(self, value: td.Value) -> typing.Optional[str]:
         return self.value_name_scope.lookup(value)
 
     def next_unused_symbol(self, prefix: str = '%'):
@@ -28,3 +28,9 @@ class ScopedTextPrinter(serializable.TextPrinter, scoped.Scoped):
     def insert_value_name(self, value: td.Value, name: str):
         self.symbol_table_scope.insert(name, value)
         self.value_name_scope.insert(value, name)
+
+    def insert_value_and_generate_name(self, value: td.Value, prefix: str = '%') -> str:
+        assert self.lookup_value_name(value) is None
+        new_name = self.next_unused_symbol(prefix)
+        self.insert_value_name(value, new_name)
+        return new_name

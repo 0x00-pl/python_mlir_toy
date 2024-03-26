@@ -38,10 +38,12 @@ class TypeListFormat(formater.Format):
         return ret
 
 
-class OpFormat(formater.Format):
+class GenericOpFormat(formater.Format):
     def __init__(self):
-        self.operands_format = formater.RepeatFormat(formater.StrFormat(), ', ')
-        self.results_format = formater.OptionalFormat(
+        self.results_name_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
+        self.op_name_format = formater.NamespacedSymbolFormat()
+        self.operands_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
+        self.results_ty_format = formater.OptionalFormat(
             formater.ListFormat([formater.ConstantStrFormat(' : '), TypeListFormat(parentheses_required=False)]),
             (lambda result_type_list: len(result_type_list) > 0),
             ':'
@@ -49,30 +51,28 @@ class OpFormat(formater.Format):
 
     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
         assert isinstance(obj, Op)
-        operand_names = (dst.lookup_value_name(item) for item in obj.operands)
-        self.operands_format.print(operand_names, dst)
-        result_type_list = list(item.ty for item in obj.results)
-        self.results_format.print(result_type_list, dst)
+        result_names = list(dst.insert_value_and_generate_name(item) for item in obj.results)
+        self.results_name_format.print(result_names, dst)
+        self.op_name_format.print(obj.op_name, dst)
+        obj.print(dst)
+        # operand_names = (dst.lookup_value_name(item) for item in obj.operands)
+        # self.operands_format.print(operand_names, dst)
+        # result_type_list = list(item.ty for item in obj.results)
+        # self.results_ty_format.print(result_type_list, dst)
 
     def parse(self, src: scoped_text_parser.ScopedTextParser):
-        raise NotImplementedError('don\'t know how to parse unspecified Op.')
-        # loc = location.FileLineColLocation(*src.last_location())
+        result_names = self.results_name_format.parse(src)
+        loc = location.FileLineColLocation(*src.last_location())
+        op_name = self.op_name_format.parse(src)
+        op_cls = Op.get_op_cls(op_name)
+        new_op = op_cls.parse(src)
+        for name, value in zip(result_names, new_op.results):
+            src.define_var(name, value)
+        return new_op
         # operand_names = self.operands_format.parse(src)
         # operands = [src.lookup_var(operand_name) for operand_name in operand_names]
-        # result_types = self.results_format.parse(src)
-        # return Op.build(loc, operands, result_types, None)
+        # result_types = self.results_ty_format.parse(src)
 
-
-class AnyOpFormat(formater.Format):
-    def print(self, obj: 'Op', dst: scoped_text_printer.ScopedTextPrinter):
-        dst.print(obj.op_name)
-        obj.print(dst)
-
-    def parse(self, src: scoped_text_parser.ScopedTextParser):
-        op_name = src.last_token()
-        src.process_token()
-        op_cls = Op.get_op_cls(op_name)
-        return op_cls.parse(src)
 
 
 #
@@ -203,7 +203,7 @@ class Op(serializable.TextSerializable):
 
     @classmethod
     def get_assembly_format(cls) -> formater.Format:
-        return OpFormat(cls)
+        return GenericOpFormat(cls)
 
     # def attr_dict_format(self):
     #     _ = self
@@ -292,7 +292,7 @@ class Op(serializable.TextSerializable):
         self.location.print(dst)
 
     @classmethod
-    def parse(cls, src: scoped_text_parser.ScopedTextParser):
+    def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'Op':
         return_name = None
         if src.last_token() == '%':
             src.process_token()
@@ -306,6 +306,7 @@ class Op(serializable.TextSerializable):
         value = op_cls.parse_assembly_format(src)
 
         src.define_var(return_name, value)
+        return Op(loc)
 
     @classmethod
     def parse_assembly_format(cls, src: scoped_text_parser.ScopedTextParser):
@@ -342,7 +343,7 @@ class Block(serializable.TextSerializable):
             op.print(dst)
 
 
-class FunctionDefineFormat(OpFormat):
+class FunctionDefineFormat(formater.Format):
     def __init__(self):
         super().__init__()
         self.function_name_format = formater.StrFormat()

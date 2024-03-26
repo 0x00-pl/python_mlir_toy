@@ -22,6 +22,37 @@ class StrFormat(Format):
         return ret
 
 
+class NamespacedSymbolFormat(Format):
+    def print(self, obj, dst: serializable.TextPrinter):
+        assert isinstance(obj, str)
+        dst.print(obj)
+
+    def parse(self, src: serializable.TextParser):
+        symbol_name = src.last_token()
+        src.process_token(check_kind=serializable.TokenKind.Identifier, skip_space=False)
+        while src.last_token() == '.':
+            src.process_token(skip_space=False)
+            symbol_name += '.' + src.last_token()
+            src.process_token(check_kind=serializable.TokenKind.Identifier, skip_space=False)
+        return symbol_name
+
+
+class VariableNameFormat(Format):
+    def __init__(self, prefix: str):
+        self.prefix = prefix
+
+    def print(self, obj, dst: serializable.TextPrinter):
+        assert isinstance(obj, str)
+        assert obj.startswith(self.prefix)
+        dst.print(obj)
+
+    def parse(self, src: serializable.TextParser):
+        src.process_token(self.prefix, skip_space=False)
+        variable_name = src.last_token()
+        src.process_token()
+        return self.prefix + variable_name
+
+
 class ConstantStrFormat(Format):
     def __init__(self, text: str):
         self.text = text

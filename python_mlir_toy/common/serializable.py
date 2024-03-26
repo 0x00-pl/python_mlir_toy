@@ -172,14 +172,15 @@ class TextParser:
     def last_token_kind(self):
         return self._last_token_kind
 
-    def process_token(self, check_token: str = None, check_kind: TokenKind = None):
+    def process_token(self, check_token: str = None, check_kind: TokenKind = None, skip_space: bool = True):
         if check_token is not None:
             assert self.last_token() == check_token
 
         if check_kind is not None:
             assert self.last_token_kind() == check_kind
 
-        self.process_space()
+        if skip_space:
+            self.process_space()
 
         self.set_last_location()
         while self.last_char() is not None:
