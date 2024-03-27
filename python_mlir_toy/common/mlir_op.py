@@ -380,21 +380,49 @@ class Block(serializable.TextSerializable):
             op.print(dst)
 
 
-class FunctionDefineFormat(formater.Format):
-    def __init__(self):
-        super().__init__()
-        self.function_name_format = formater.StrFormat()
-        self.function_operand_format = formater.ListFormat([
-            formater.StrFormat(), formater.ConstantStrFormat(' : '), TypeFormat()
-        ])
-        self.function_operands_format = formater.RepeatFormat(self.function_operand_format, ', ')
+# class FunctionDefineFormat(formater.Format):
+#     def __init__(self):
+#         super().__init__()
+#         self.function_name_format = formater.StrFormat()
+#         self.function_operand_format = formater.ListFormat([
+#             formater.StrFormat(), formater.ConstantStrFormat(' : '), TypeFormat()
+#         ])
+#         self.function_operands_format = formater.RepeatFormat(self.function_operand_format, ', ')
+#
+#
+#     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
+#         pass
+#
+#     def parse(self, src: scoped_text_parser.ScopedTextParser):
+#         pass
 
+class ModuleFormat(OpFormat):
+    def __init__(self):
+        super().__init__(ModuleOp)
+        self.function_arguments_format = formater.DictFormat(
+            formater.VariableNameFormat('%'),
+            formater.TypeFormat()
+        )
 
     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
-        pass
+        assert isinstance(obj, ModuleOp)
+        with dst:
+            dst.print('{', end='\n')
+            for operator in obj.blocks:
+                operator.print(dst)
+            dst.print('}', end='\n')
 
     def parse(self, src: scoped_text_parser.ScopedTextParser):
-        pass
+        loc = location.FileLineColLocation(*src.last_location())
+        with src:
+            op_list: typing.List['{function_name}'] = []
+            src.process_token('{')
+            while src.last_token() != '}':
+                op = Op.parse(src)
+                assert hasattr(op, 'function_name')
+                op_list.append(op)
+
+            return ModuleOp(loc, 'no_name', {item.function_name: item for item in op_list})
 
 
 class ModuleOp(Op):
@@ -407,9 +435,7 @@ class ModuleOp(Op):
 
     @classmethod
     def get_assembly_format(cls) -> formater.Format:
-        assembly_format = super().get_assembly_format()
-        assembly_format.append((cls.print_content, NotImplemented))
-        return assembly_format
+        return ModuleFormat()
 
     def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):
         dst.print('{', end='\n')

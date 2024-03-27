@@ -1,6 +1,6 @@
 import typing
 
-from python_mlir_toy.common import serializable, tools
+from python_mlir_toy.common import serializable, tools, mlir_type
 
 
 class Format:
@@ -51,6 +51,15 @@ class VariableNameFormat(Format):
         variable_name = src.last_token()
         src.process_token()
         return self.prefix + variable_name
+
+
+class TypeFormat(Format):
+    def print(self, obj, dst: serializable.TextPrinter):
+        assert isinstance(obj, mlir_type.Type)
+        obj.print(dst)
+
+    def parse(self, src: serializable.TextParser):
+        return mlir_type.parse_type(src)
 
 
 class ConstantStrFormat(Format):

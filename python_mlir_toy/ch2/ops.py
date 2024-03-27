@@ -33,8 +33,6 @@ class ConstantOp(ToyOp):
         return printer, parser
 
 
-
-
 class FuncOp(ToyOp, td.IsolatedFromAbove):
     op_name = 'toy.func'
 
