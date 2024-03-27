@@ -37,42 +37,63 @@ class TypeListFormat(formater.Format):
             ret = self.types_format.parse(src)
         return ret
 
+#
+# class GenericOpFormat(formater.Format):
+#     def __init__(self):
+#         self.results_name_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
+#         self.op_name_format = formater.NamespacedSymbolFormat()
+#         # self.operands_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
+#         # self.results_ty_format = formater.OptionalFormat(
+#         #     formater.ListFormat([formater.ConstantStrFormat(' : '), TypeListFormat(parentheses_required=False)]),
+#         #     (lambda result_type_list: len(result_type_list) > 0),
+#         #     ':'
+#         # )
+#
+#     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
+#         assert isinstance(obj, Op)
+#         result_names = list(dst.insert_value_and_generate_name(item) for item in obj.results)
+#         self.results_name_format.print(result_names, dst)
+#         self.op_name_format.print(obj.op_name, dst)
+#         obj.print(dst)
+#
+#     def parse(self, src: scoped_text_parser.ScopedTextParser):
+#         result_names = self.results_name_format.parse(src)
+#         # loc = location.FileLineColLocation(*src.last_location())
+#         op_name = self.op_name_format.parse(src)
+#         op_cls = Op.get_op_cls(op_name)
+#         new_op = op_cls.parse(src)
+#         for name, value in zip(result_names, new_op.results):
+#             src.define_var(name, value)
+#         return new_op
+#         # operand_names = self.operands_format.parse(src)
+#         # operands = [src.lookup_var(operand_name) for operand_name in operand_names]
+#         # result_types = self.results_ty_format.parse(src)
 
-class GenericOpFormat(formater.Format):
-    def __init__(self):
-        self.results_name_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
-        self.op_name_format = formater.NamespacedSymbolFormat()
+
+class OpFormat(formater.Format):
+    def __init__(self, op_cls: typing.Type['Op']):
+        # self.results_name_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
+        # self.op_name_format = formater.NamespacedSymbolFormat()
         self.operands_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
         self.results_ty_format = formater.OptionalFormat(
             formater.ListFormat([formater.ConstantStrFormat(' : '), TypeListFormat(parentheses_required=False)]),
             (lambda result_type_list: len(result_type_list) > 0),
             ':'
         )
+        self.op_cls = op_cls
 
     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
-        assert isinstance(obj, Op)
-        result_names = list(dst.insert_value_and_generate_name(item) for item in obj.results)
-        self.results_name_format.print(result_names, dst)
-        self.op_name_format.print(obj.op_name, dst)
-        obj.print(dst)
-        # operand_names = (dst.lookup_value_name(item) for item in obj.operands)
-        # self.operands_format.print(operand_names, dst)
-        # result_type_list = list(item.ty for item in obj.results)
-        # self.results_ty_format.print(result_type_list, dst)
+        operand_names = (dst.lookup_value_name(item) for item in obj.operands)
+        self.operands_format.print(operand_names, dst)
+        result_type_list = list(item.ty for item in obj.results)
+        self.results_ty_format.print(result_type_list, dst)
 
     def parse(self, src: scoped_text_parser.ScopedTextParser):
-        result_names = self.results_name_format.parse(src)
         loc = location.FileLineColLocation(*src.last_location())
-        op_name = self.op_name_format.parse(src)
-        op_cls = Op.get_op_cls(op_name)
-        new_op = op_cls.parse(src)
-        for name, value in zip(result_names, new_op.results):
-            src.define_var(name, value)
-        return new_op
-        # operand_names = self.operands_format.parse(src)
-        # operands = [src.lookup_var(operand_name) for operand_name in operand_names]
-        # result_types = self.results_ty_format.parse(src)
-
+        operand_names = self.operands_format.parse(src)
+        operands = [src.lookup_var(operand_name) for operand_name in operand_names]
+        result_types = self.results_ty_format.parse(src)
+        return self.op_cls(loc, operands, result_types)
 
 
 #
@@ -175,6 +196,9 @@ class Op(serializable.TextSerializable):
     op_name: str = None
     op_type_dict: typing.Dict[str, typing.Type['Op']] = {}
 
+    _results_name_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
+    _op_name_format = formater.NamespacedSymbolFormat()
+
     @staticmethod
     def register_op_cls(name: str, op_type: typing.Type['Op']):
         assert name not in Op.op_type_dict
@@ -196,14 +220,15 @@ class Op(serializable.TextSerializable):
         self.results = [td.Value(ty) for ty in result_types] if result_types else []
         self.blocks = blocks
 
-    @classmethod
-    def build(cls, loc: location.Location, operands: typing.List[td.Value] = None,
-              result_types: typing.List[mlir_type.Type] = None, blocks: typing.List['Block'] = None):
-        return cls(loc=loc, operands=operands, result_types=result_types, blocks=blocks)
+
+    # @classmethod
+    # def build(cls, loc: location.Location, operands: typing.List[td.Value] = None,
+    #           result_types: typing.List[mlir_type.Type] = None, blocks: typing.List['Block'] = None):
+    #     return cls(loc=loc, operands=operands, result_types=result_types, blocks=blocks)
 
     @classmethod
     def get_assembly_format(cls) -> formater.Format:
-        return GenericOpFormat(cls)
+        return OpFormat(cls)
 
     # def attr_dict_format(self):
     #     _ = self
@@ -228,16 +253,20 @@ class Op(serializable.TextSerializable):
     #     return self.print_result_types, NotImplemented
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        if len(self.results) != 0:
-            self.print_return_values(dst)
-            dst.print(' = ', end='')
-        dst.print(self.op_name, end='')
-
+        result_names = list(dst.insert_value_and_generate_name(item) for item in self.results)
+        Op._results_name_format.print(result_names, dst)
+        Op._op_name_format.print(self.op_name, dst)
         self.print_assembly_format(dst)
-
-        dst.print(dst.sep, end='')
-        self.print_loc(dst)
-        dst.print_newline()
+        # if len(self.results) != 0:
+        #     self.print_return_values(dst)
+        #     dst.print(' = ', end='')
+        # dst.print(self.op_name, end='')
+        #
+        # self.print_assembly_format(dst)
+        #
+        # dst.print(dst.sep, end='')
+        # self.print_loc(dst)
+        # dst.print_newline()
 
     def print_assembly_format(self, dst: scoped_text_printer.ScopedTextPrinter):
         assembly_format = self.get_assembly_format()
@@ -255,58 +284,66 @@ class Op(serializable.TextSerializable):
         #     else:
         #         raise ValueError(f'Unknown assembly format item: {item}')
 
-    def print_return_values(self, dst: scoped_text_printer.ScopedTextPrinter):
-        for result_value in tools.with_sep(self.results, lambda: dst.print(',')):
-            result_name = dst.next_unused_symbol('%')
-            dst.insert_value_name(result_value, result_name)
-            dst.print(result_name, end='')
-
-    def print_arguments_detail(self, dst: scoped_text_printer.ScopedTextPrinter, print_type: bool = False):
-        if len(self.operands) > 0:
-            dst.print('(', end='')
-            for operand_value in tools.with_sep(self.operands, lambda: dst.print(',')):
-                operand_name = dst.lookup_value_name(operand_value)
-                dst.print(operand_name, end='')
-                if print_type:
-                    dst.print(' :')
-                    operand_value.ty.print(dst)
-            dst.print(')', end='')
-
-    def print_arguments(self, dst: scoped_text_printer.ScopedTextPrinter):
-        for operand_value in tools.with_sep(self.operands, lambda: dst.print(',')):
-            operand_name = dst.lookup_value_name(operand_value)
-            dst.print(operand_name, end='')
-
-    def print_result_types(self, dst: serializable.TextPrinter):
-        if len(self.results) > 1:
-            dst.print('(', end='')
-            for result_value in tools.with_sep(self.results, lambda: dst.print(',')):
-                result_value.ty.print(dst)
-            dst.print(')', end='')
-        elif len(self.results) == 1:
-            self.results[0].ty.print(dst)
-        else:
-            dst.print('none', end='')
-
-    def print_loc(self, dst: serializable.TextPrinter):
-        self.location.print(dst)
+    # def print_return_values(self, dst: scoped_text_printer.ScopedTextPrinter):
+    #     for result_value in tools.with_sep(self.results, lambda: dst.print(',')):
+    #         result_name = dst.next_unused_symbol('%')
+    #         dst.insert_value_name(result_value, result_name)
+    #         dst.print(result_name, end='')
+    #
+    # def print_arguments_detail(self, dst: scoped_text_printer.ScopedTextPrinter, print_type: bool = False):
+    #     if len(self.operands) > 0:
+    #         dst.print('(', end='')
+    #         for operand_value in tools.with_sep(self.operands, lambda: dst.print(',')):
+    #             operand_name = dst.lookup_value_name(operand_value)
+    #             dst.print(operand_name, end='')
+    #             if print_type:
+    #                 dst.print(' :')
+    #                 operand_value.ty.print(dst)
+    #         dst.print(')', end='')
+    #
+    # def print_arguments(self, dst: scoped_text_printer.ScopedTextPrinter):
+    #     for operand_value in tools.with_sep(self.operands, lambda: dst.print(',')):
+    #         operand_name = dst.lookup_value_name(operand_value)
+    #         dst.print(operand_name, end='')
+    #
+    # def print_result_types(self, dst: serializable.TextPrinter):
+    #     if len(self.results) > 1:
+    #         dst.print('(', end='')
+    #         for result_value in tools.with_sep(self.results, lambda: dst.print(',')):
+    #             result_value.ty.print(dst)
+    #         dst.print(')', end='')
+    #     elif len(self.results) == 1:
+    #         self.results[0].ty.print(dst)
+    #     else:
+    #         dst.print('none', end='')
+    #
+    # def print_loc(self, dst: serializable.TextPrinter):
+    #     self.location.print(dst)
 
     @classmethod
     def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'Op':
-        return_name = None
-        if src.last_token() == '%':
-            src.process_token()
-            return_name = '%' + src.last_token()
-            src.process_token(check_kind=serializable.TokenKind.Identifier)
-            src.process_token('=')
-
-        op_cls_name = src.last_token()
-        src.process_token(check_kind=serializable.TokenKind.Identifier)
-        op_cls = Op.get_op_cls(op_cls_name)
-        value = op_cls.parse_assembly_format(src)
-
-        src.define_var(return_name, value)
-        return Op(loc)
+        result_names = Op._results_name_format.parse(src)
+        # loc = location.FileLineColLocation(*src.last_location())
+        op_name = Op._op_name_format.parse(src)
+        op_cls = Op.get_op_cls(op_name)
+        new_op = op_cls.parse_assembly_format(src)
+        for name, value in zip(result_names, new_op.results):
+            src.define_var(name, value)
+        return new_op
+        # return_name = None
+        # if src.last_token() == '%':
+        #     src.process_token()
+        #     return_name = '%' + src.last_token()
+        #     src.process_token(check_kind=serializable.TokenKind.Identifier)
+        #     src.process_token('=')
+        #
+        # op_cls_name = src.last_token()
+        # src.process_token(check_kind=serializable.TokenKind.Identifier)
+        # op_cls = Op.get_op_cls(op_cls_name)
+        # value = op_cls.parse_assembly_format(src)
+        #
+        # src.define_var(return_name, value)
+        # return Op(loc)
 
     @classmethod
     def parse_assembly_format(cls, src: scoped_text_parser.ScopedTextParser):
