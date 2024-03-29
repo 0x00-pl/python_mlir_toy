@@ -7,7 +7,7 @@ from python_mlir_toy.common import location, mlir_type, td, mlir_op, scoped
 
 class MlirGenImpl:
     def __init__(self):
-        self.func_dict: typing.Dict[str, ops.FuncOp] = {}
+        self.func_dict: typing.Dict[str, ops.ToyFuncOp] = {}
         self.symbol_table = scoped.SymbolTable[td.Value]()
         self.insert_point_list = []
 
@@ -92,7 +92,7 @@ class MlirGenImpl:
             func_output_types = []
 
         func_type = mlir_type.FunctionType(func_input_types, func_output_types)
-        ret = ops.FuncOp(loc, func.proto.name, arg_name_list, func_type, block)
+        ret = ops.ToyFuncOp(loc, func.proto.name, arg_name_list, func_type, block)
         self.func_dict[func.proto.name] = ret
         return ret
 

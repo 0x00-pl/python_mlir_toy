@@ -33,7 +33,7 @@ class ConstantOp(ToyOp):
         return printer, parser
 
 
-class FuncOp(ToyOp, td.IsolatedFromAbove):
+class ToyFuncOp(ToyOp, mlir_op.FuncOp, td.IsolatedFromAbove):
     op_name = 'toy.func'
 
     def __init__(self, loc: location.Location, function_name: str,
@@ -101,7 +101,7 @@ class FuncOp(ToyOp, td.IsolatedFromAbove):
 class GenericCallOp(ToyOp):
     op_name = 'toy.generic_call'
 
-    def __init__(self, loc: location.Location, callee: FuncOp, *inputs: td.Value):
+    def __init__(self, loc: location.Location, callee: ToyFuncOp, *inputs: td.Value):
         super().__init__(loc, operands=list(inputs), result_types=callee.get_result_types())
         self.callee = callee
         # todo: verify callee input types
@@ -171,7 +171,7 @@ class ReshapeOp(ToyOp):
                 ' to ', cls.result_types_format()]
 
 
-class ReturnOp(ToyOp, td.HasParent[FuncOp]):
+class ReturnOp(ToyOp, td.HasParent[ToyFuncOp]):
     op_name = 'toy.return'
 
     def __init__(self, loc: location.Location, operand: Optional[td.Value] = None):

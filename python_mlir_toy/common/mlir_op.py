@@ -218,13 +218,7 @@ class Op(serializable.TextSerializable):
         self.location = loc
         self.operands = operands if operands else []
         self.results = [td.Value(ty) for ty in result_types] if result_types else []
-        self.blocks = blocks
-
-
-    # @classmethod
-    # def build(cls, loc: location.Location, operands: typing.List[td.Value] = None,
-    #           result_types: typing.List[mlir_type.Type] = None, blocks: typing.List['Block'] = None):
-    #     return cls(loc=loc, operands=operands, result_types=result_types, blocks=blocks)
+        self.blocks = blocks if blocks else []
 
     @classmethod
     def get_assembly_format(cls) -> formater.Format:
@@ -365,7 +359,6 @@ class Op(serializable.TextSerializable):
         #     else:
         #         raise ValueError(f'Unknown assembly format item: {item}')
 
-
 class Block(serializable.TextSerializable):
     def __init__(self, input_types=None):
         self.arguments = [td.Value(ty) for ty in input_types] if input_types else []
@@ -379,6 +372,18 @@ class Block(serializable.TextSerializable):
             dst.print_ident()
             op.print(dst)
 
+
+class FuncOp(Op, td.IsolatedFromAbove):
+    op_name = 'toy.func'
+
+    def __init__(self, loc: location.Location, function_name: str,
+                 arg_name_list: typing.List[typing.Tuple[str, location.Location] | str], function_type: mlir_type.FunctionType,
+                 block: Block):
+        super().__init__(loc, blocks=[block])
+        self.function_name = function_name
+        self.function_type = function_type
+        self.arg_name_list = arg_name_list
+        assert len(arg_name_list) == len(function_type.inputs)
 
 # class FunctionDefineFormat(formater.Format):
 #     def __init__(self):
@@ -395,6 +400,7 @@ class Block(serializable.TextSerializable):
 #
 #     def parse(self, src: scoped_text_parser.ScopedTextParser):
 #         pass
+
 
 class ModuleFormat(OpFormat):
     def __init__(self):
@@ -415,11 +421,11 @@ class ModuleFormat(OpFormat):
     def parse(self, src: scoped_text_parser.ScopedTextParser):
         loc = location.FileLineColLocation(*src.last_location())
         with src:
-            op_list: typing.List['{function_name}'] = []
+            op_list: typing.List[FuncOp] = []
             src.process_token('{')
             while src.last_token() != '}':
                 op = Op.parse(src)
-                assert hasattr(op, 'function_name')
+                assert isinstance(op, FuncOp)
                 op_list.append(op)
 
             return ModuleOp(loc, 'no_name', {item.function_name: item for item in op_list})
