@@ -277,6 +277,11 @@ class FunctionType(Type):
             dst.print(')')
 
 
+def print_type_list(dst: TextPrinter, type_list: typing.List[Type], sep: str = ', '):
+    for result_type in tools.with_sep(type_list, lambda: dst.print(sep)):
+        result_type.print(dst)
+
+
 def parse_type_list(src: TextParser, sep: str = ','):
     if src.last_token() == '(':
         src.process_token()

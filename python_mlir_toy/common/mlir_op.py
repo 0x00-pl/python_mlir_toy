@@ -1,7 +1,7 @@
-import sys
 import typing
 
-from python_mlir_toy.common import location, td, serializable, scoped_text_printer, mlir_type, tools, scoped_text_parser, formater
+from python_mlir_toy.common import location, td, serializable, scoped_text_printer, mlir_type, scoped_text_parser, \
+    formater, tools
 
 
 class TypeFormat(formater.Format):
@@ -42,9 +42,7 @@ class OpFormat(formater.Format):
         self.operands_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
         self.results_ty_format = formater.OptionalFormat(
             formater.ListFormat([formater.ConstantStrFormat(' : '), TypeListFormat(parentheses_required=False)]),
-            (lambda result_type_list: len(result_type_list) > 0),
-            ':'
-        )
+            (lambda result_type_list: len(result_type_list) > 0), ':')
         self.op_cls = op_cls
 
     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
@@ -133,46 +131,83 @@ class Block(serializable.TextSerializable):
             op.print(dst)
 
 
-class FuncOp(Op, td.IsolatedFromAbove):
+class FuncOp(Op):
     op_name = 'toy.func'
 
     def __init__(self, loc: location.Location, function_name: str,
-                 arg_name_list: typing.List[typing.Tuple[str, location.Location] | str], function_type: mlir_type.FunctionType,
-                 block: Block):
+                 arg_name_list: typing.List[typing.Tuple[str, location.Location] | str],
+                 function_type: mlir_type.FunctionType, block: Block):
         super().__init__(loc, blocks=[block])
         self.function_name = function_name
         self.function_type = function_type
         self.arg_name_list = arg_name_list
         assert len(arg_name_list) == len(function_type.inputs)
 
-
-class ModuleFormat(OpFormat):
-    def __init__(self):
-        super().__init__(ModuleOp)
-        self.function_arguments_format = formater.DictFormat(
-            formater.VariableNameFormat('%'),
-            formater.TypeFormat()
-        )
-
-    def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
-        assert isinstance(obj, ModuleOp)
+    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
         with dst:
+            dst.print('@', self.function_name, '(', sep='', end='')
+            for arg_name, arg_ty in tools.with_sep(zip(self.arg_name_list, self.function_type.inputs),
+                                                   (lambda: dst.print(', '))):
+                arg_loc = None
+                if isinstance(arg_name, tuple):
+                    arg_name, arg_loc = arg_name
+
+                dst.insert_value_name(arg_ty, arg_name)
+                dst.print(arg_name, ': ', sep='', end='')
+                arg_ty.print(dst)
+                if arg_loc is not None:
+                    dst.print(' ')
+                    arg_loc.print(dst)
+            dst.print(')')
+            if len(self.function_type.outputs) != 0:
+                dst.print(' -> ')
+                if len(self.function_type.outputs) == 1:
+                    self.function_type.outputs[0].print(dst)
+                else:
+                    dst.print('(', end='')
+                    mlir_type.print_type_list(dst, self.function_type.outputs)
+                    dst.print(')')
+
             dst.print('{', end='\n')
-            for operator in obj.blocks:
-                operator.print(dst)
+            for op in self.blocks[0].op_list:
+                result_names = [dst.insert_value_and_generate_name(item) for item in op.results]
+                Op._results_name_format.print(result_names, dst)
+                dst.print_ident()
+                dst.print(' = ', end='')
+                dst.print(op.op_name)
+                op.print(dst)
+                dst.print(end='\n')
             dst.print('}', end='\n')
 
-    def parse(self, src: scoped_text_parser.ScopedTextParser):
-        loc = location.FileLineColLocation(*src.last_location())
-        with src:
-            op_list: typing.List[FuncOp] = []
-            src.process_token('{')
-            while src.last_token() != '}':
-                op = Op.parse(src)
-                assert isinstance(op, FuncOp)
-                op_list.append(op)
+    @classmethod
+    def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'FuncOp':
+        pass
 
-            return ModuleOp(loc, 'no_name', {item.function_name: item for item in op_list})
+
+# class ModuleFormat(OpFormat):
+#     def __init__(self):
+#         super().__init__(ModuleOp)
+#         self.function_arguments_format = formater.DictFormat(formater.VariableNameFormat('%'), formater.TypeFormat())
+#
+#     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
+#         assert isinstance(obj, ModuleOp)
+#         with dst:
+#             dst.print('{', end='\n')
+#             for operator in obj.blocks:
+#                 operator.print(dst)
+#             dst.print('}', end='\n')
+#
+#     def parse(self, src: scoped_text_parser.ScopedTextParser):
+#         loc = location.FileLineColLocation(*src.last_location())
+#         with src:
+#             op_list: typing.List[FuncOp] = []
+#             src.process_token('{')
+#             while src.last_token() != '}':
+#                 op = Op.parse(src)
+#                 assert isinstance(op, FuncOp)
+#                 op_list.append(op)
+#
+#             return ModuleOp(loc, 'no_name', {item.function_name: item for item in op_list})
 
 
 class ModuleOp(Op):
@@ -183,18 +218,31 @@ class ModuleOp(Op):
         self.module_name = module_name
         self.func_dict = func_dict
 
-    @classmethod
-    def get_assembly_format(cls) -> formater.Format:
-        return ModuleFormat()
-
-    def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):
-        dst.print('{', end='\n')
+    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
         with dst:
+            dst.print('{', end='\n')
             for func in self.func_dict.values():
                 dst.print_ident()
                 func.print(dst)
-        dst.print('}', end='')
+            dst.print('}', end='')
 
-    def dump(self):
-        printer = scoped_text_printer.ScopedTextPrinter(file=sys.stdout)
-        self.print(printer)
+    @classmethod
+    def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'ModuleOp':
+        func_dict = {}
+        with src:
+            src.process_token('{')
+            while src.last_token() != '}':
+                src.process_token()
+                func_op_name = Op._op_name_format.parse(src)
+                func_cls = Op.get_op_cls(func_op_name)
+                func_op = func_cls.parse(src)
+                assert isinstance(func_op, FuncOp)
+                func_dict[func_op.function_name] = func_op
+            src.process_token('}')
+        return ModuleOp(src.last_location(), 'no_name', func_dict)
+
+
+def parse_module(src: scoped_text_parser.ScopedTextParser):
+    op_name = Op._op_name_format.parse(src)
+    assert op_name == 'module'
+    return ModuleOp.parse(src)
