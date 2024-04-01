@@ -33,7 +33,7 @@ class ConstantOp(ToyOp):
         return printer, parser
 
 
-class ToyFuncOp(ToyOp, mlir_op.FuncOp, td.IsolatedFromAbove):
+class ToyFuncOp(ToyOp, mlir_op.FuncOp):
     op_name = 'toy.func'
 
     def __init__(self, loc: location.Location, function_name: str,

@@ -29,9 +29,9 @@ class TypeListFormat(formater.Format):
 
     def parse(self, src: serializable.TextParser) -> typing.List[typing.Any]:
         if src.last_char() == '(':
-            src.process_token()
+            src.drop_token()
             ret = self.types_format.parse(src)
-            src.process_token(')')
+            src.drop_token(')')
         else:
             ret = self.types_format.parse(src)
         return ret
@@ -134,7 +134,7 @@ class Block(serializable.TextSerializable):
 
 
 class FuncOp(Op):
-    op_name = 'toy.func'
+    op_name = 'func'
 
     def __init__(self, loc: location.Location, function_name: str,
                  arg_name_list: typing.List[typing.Tuple[str, location.Location] | str],
@@ -184,33 +184,33 @@ class FuncOp(Op):
     @classmethod
     def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'FuncOp':
         with src:
-            loc = location.FileLineColLocation(*src.last_location())
+            loc = location.FileLineColLocation(*src.get_location())
             function_name = Op._function_name_format.parse(src)
             arg_name_list = []
             arg_ty_list = []
             output_ty_list = []
-            src.process_token('(')
+            src.drop_token('(')
             while src.last_token() != ')':
                 if src.last_token() == ',':
-                    src.process_token()
+                    src.drop_token()
                 arg_name = Op._variable_name_format.parse(src)
-                src.process_token(':')
+                src.drop_token(':')
                 arg_ty = mlir_type.parse_type(src)
                 arg_name_list.append(arg_name)
                 arg_ty_list.append(arg_ty)
-            src.process_token(')')
+            src.drop_token(')')
             if src.last_token() == '-':
-                src.process_token('-')
-                src.process_token('>')
+                src.drop_token('-')
+                src.drop_token('>')
                 output_ty_list = mlir_type.parse_type_list(src)
 
             function_type = mlir_type.FunctionType(arg_ty_list, output_ty_list)
 
             op_list = []
-            src.process_token('{')
+            src.drop_token('{')
             while src.last_token() != '}':
                 op_result_names = Op._results_name_format.parse(src)
-                src.process_token('=')
+                src.drop_token('=')
                 op_name = Op._op_name_format.parse(src)
                 op_cls = Op.get_op_cls(op_name)
                 op = op_cls.parse(src)
@@ -218,7 +218,7 @@ class FuncOp(Op):
                 for name, value in zip(op_result_names, op.results):
                     src.define_var(name, value)
 
-            src.process_token('}')
+            src.drop_token('}')
             return FuncOp(loc, function_name, arg_name_list, function_type, Block(op_list))
 
 
@@ -242,15 +242,14 @@ class ModuleOp(Op):
     def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'ModuleOp':
         func_dict = {}
         with src:
-            src.process_token('{')
+            src.drop_token('{')
             while src.last_token() != '}':
-                src.process_token()
                 func_op_name = Op._op_name_format.parse(src)
                 func_cls = Op.get_op_cls(func_op_name)
                 func_op = func_cls.parse(src)
                 assert isinstance(func_op, FuncOp)
                 func_dict[func_op.function_name] = func_op
-            src.process_token('}')
+            src.drop_token('}')
         return ModuleOp(src.last_location(), 'no_name', func_dict)
 
 

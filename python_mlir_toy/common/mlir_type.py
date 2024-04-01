@@ -26,7 +26,7 @@ class Type(serializable.TextSerializable):
 
     @classmethod
     def parse(cls, src: TextParser):
-        src.process_token(cls.name)
+        src.drop_token(cls.name)
         return cls()
 
 
@@ -66,7 +66,7 @@ class IntType(Type):
     def parse(cls, src: TextParser):
         assert src.last_token_kind() == serializable.TokenKind.Identifier
         type_str: str = src.last_token()
-        src.process_token()
+        src.drop_token()
         signed = not type_str.startswith('u')
         bits = int(type_str.strip('sui'))
         return cls(bits=bits, signed=signed)
@@ -96,10 +96,10 @@ class ComplexType(Type):
 
     @classmethod
     def parse(cls, src: TextParser):
-        src.process_token('complex')
-        src.process_token('<')
+        src.drop_token('complex')
+        src.drop_token('<')
         element_type = parse_type(src)
-        src.process_token('>')
+        src.drop_token('>')
         return cls(element_type)
 
 
@@ -129,8 +129,8 @@ class VectorType(Type):
 
     @classmethod
     def parse(cls, src: TextParser):
-        src.process_token('vector')
-        src.process_space()
+        src.drop_token('vector')
+        src.drop_space()
         dims = []
         is_scalable_dims = []
         element_type = None
@@ -156,7 +156,7 @@ class VectorType(Type):
             else:
                 element_type = parse_type(src)
                 break
-        src.process_token('>')
+        src.drop_token('>')
         return cls(element_type, dims, is_scalable_dims)
 
 
@@ -174,6 +174,8 @@ class TensorType(Type):
 
 
 class RankedTensorType(TensorType):
+    name = 'tensor'
+
     def __init__(self, element_type: Type, shape: typing.List[int]):
         super().__init__(element_type)
         self.shape = shape
@@ -194,14 +196,14 @@ class RankedTensorType(TensorType):
 
     @classmethod
     def parse(cls, src: TextParser):
-        src.process_token('tensor')
-        src.process_space()
-        src.process_token('<')
+        src.drop_token('tensor')
+        src.drop_space()
+        src.drop_token('<')
         if src.last_char() == '*':
             src.process_char('*')
             src.process_char('x')
             element_type = parse_type(src)
-            src.process_token('>')
+            src.drop_token('>')
             return TensorType(element_type)
 
         shape = []
@@ -218,7 +220,7 @@ class RankedTensorType(TensorType):
             else:
                 element_type = parse_type(src)
                 assert src.last_token() == '>'
-        src.process_token('>')
+        src.drop_token('>')
         assert element_type is not None
         return cls(element_type, shape)
 
@@ -240,19 +242,19 @@ class TupleType(Type):
 
     @classmethod
     def parse(cls, src: TextParser):
-        src.process_token('tuple')
-        src.process_space()
-        src.process_token('<')
-        src.process_token(')')
+        src.drop_token('tuple')
+        src.drop_space()
+        src.drop_token('<')
+        src.drop_token(')')
         types = []
         while src.last_char() != ')':
             if src.last_char() == ',':
                 src.process_char()
-                src.process_space()
+                src.drop_space()
             sub_type = parse_type(src)
             types.append(sub_type)
-        src.process_token(')')
-        src.process_token('>')
+        src.drop_token(')')
+        src.drop_token('>')
         return cls(types)
 
 
@@ -284,32 +286,32 @@ def print_type_list(dst: TextPrinter, type_list: typing.List[Type], sep: str = '
 
 def parse_type_list(src: TextParser, sep: str = ','):
     if src.last_token() == '(':
-        src.process_token()
+        src.drop_token()
         type_list = [parse_type(src)]
         while src.last_token() != ')':
             if src.last_token() == sep:
-                src.process_token()
+                src.drop_token()
             type_list.append(parse_type(src))
-        src.process_token(')')
+        src.drop_token(')')
     else:
         type_list = [parse_type(src)]
     return type_list
 
 
 def parse_type(src: TextParser):
-    src.process_space()
+    src.drop_space()
     type_name: str = src.last_token()
     if type_name == 'unknown_type':
-        src.process_token()
+        src.drop_token()
         return None
     elif type_name[0] in 'sui' and 'i' in type_name and type_name.lstrip('sui').isdigit():
-        src.process_token()
+        src.drop_token()
         return IntType(int(type_name.lstrip('sui')), type_name[0] != 'u')
     elif type_name == '(':
         # function type
         arg_types = parse_type_list(src)
-        src.process_token('-')
-        src.process_token('>')
+        src.drop_token('-')
+        src.drop_token('>')
         result_types = parse_type_list(src)
         return FunctionType(arg_types, result_types)
     else:
@@ -320,8 +322,8 @@ def parse_type(src: TextParser):
 
 def parse_function_type(src: TextParser):
     arg_types = parse_type_list(src)
-    src.process_token('-')
-    src.process_token('>')
+    src.drop_token('-')
+    src.drop_token('>')
     result_types = parse_type_list(src)
     return FunctionType(arg_types, result_types)
 

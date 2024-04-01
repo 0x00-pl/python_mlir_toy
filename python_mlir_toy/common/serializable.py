@@ -123,48 +123,50 @@ class TextParser:
         self.filename = filename
         self.cur_line = 0
         self.cur_pose = 0
-        self._last_location = None
         self._line_buffer = self.file.readline()
-        self._last_char = None
+        self._cur_char = self._line_buffer[self.cur_pose]
         self._last_token = None
         self._last_token_kind: TokenKind = TokenKind.Unknown
-        self.process_char()
-        self.process_token()
+        self.drop_token()
         self._number_pattern = re.compile(r'[-+]?(([0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)|0[xo][0-9a-fA-F]+)')
 
-    def set_last_location(self):
-        self._last_location = (self.filename, self.cur_line + 1, self.cur_pose + 1)
+    def get_location(self):
+        return self.filename, self.cur_line + 1, self.cur_pose + 1
 
-    def last_location(self):
-        return self._last_location
+    def cur_char(self) -> str:
+        return self._cur_char
 
-    def last_char(self) -> str:
-        return self._last_char
+    # def last_char(self) -> str:
+    #     return self._last_char
+    def drop_line(self):
+        self.cur_line += 1
+        self.cur_pose = 0
+        self._line_buffer = self.file.readline()
 
-    def process_char(self, check_char: str = None):
+    def drop_char(self, check_char: str = None):
         if check_char is not None:
-            assert self.last_char() == check_char
-
-        self.set_last_location()
-        self._last_char = self._line_buffer[self.cur_pose]
+            assert self._cur_char == check_char
 
         self.cur_pose += 1
         if self.cur_pose >= len(self._line_buffer):
-            self.cur_line += 1
-            self._line_buffer = self.file.readline()
-            self.cur_pose = 0
+            self.drop_line()
 
-    def process_space(self, check_space: bool = False):
-        if check_space:
-            assert self.last_char().isspace()
+        if len(self._line_buffer) != 0:
+            self._cur_char = self._line_buffer[self.cur_pose]
+        else:
+            self._cur_char = None
 
-        self.set_last_location()
-        while self.last_char() is not None and (self.last_char().isspace() or self.last_char() == '/'):
-            prev_char = self.last_char()
-            self.process_char()
-            if prev_char == '/' and self.last_char() == '/':  # //comment
-                while self.last_char() is not None and self.last_char() != '\n':
-                    self.process_char()
+    def is_space_or_comment(self):
+        is_space = self.cur_char() is not None and self.cur_char().isspace()
+        is_comment = self.cur_char() == '/' and self.cur_pose + 1 < len(self._line_buffer) and self._line_buffer[self.cur_pose + 1] == '/'
+        return is_space or is_comment
+
+    def drop_space(self):
+        while self.is_space_or_comment():
+            if self.cur_char() == '/':
+                self.drop_line()
+            else:
+                self.drop_char()
 
     def last_token(self):
         return self._last_token
@@ -172,7 +174,7 @@ class TextParser:
     def last_token_kind(self):
         return self._last_token_kind
 
-    def process_token(self, check_token: str = None, check_kind: TokenKind = None, skip_space: bool = True):
+    def drop_token(self, check_token: str = None, check_kind: TokenKind = None, skip_space: bool = True):
         if check_token is not None:
             assert self.last_token() == check_token
 
@@ -180,57 +182,40 @@ class TextParser:
             assert self.last_token_kind() == check_kind
 
         if skip_space:
-            self.process_space()
+            self.drop_space()
 
-        self.set_last_location()
-        while self.last_char() is not None:
-            if self.last_char().isidentifier():
-                identifier = ''
-                while self.last_char().isidentifier():
-                    identifier += self.last_char()
-                    self.process_char()
-                self._last_token, self._last_token_kind = identifier, TokenKind.Identifier
-                return
-            elif self.last_char().isdigit():
-                number_str = ''
-                while self._number_pattern.match(number_str + self.last_char()) is not None:
-                    number_str += self.last_char()
-                    self.process_char()
-                if '.' in number_str:
-                    self._last_token, self._last_token_kind = float(number_str), TokenKind.Number
-                else:
-                    self._last_token, self._last_token_kind = int(number_str), TokenKind.Number
-                return
-            # elif self.last_char() == '/':
-            #     self.process_char()
-            #     if self.last_char() == '/':
-            #         self.process_char()
-            #         content = ''
-            #         while self.last_char() != '\n':
-            #             content += self.last_char()
-            #             self.process_char()
-            #         self._last_token, self._last_token_kind = content, TokenKind.Comment
-            #     else:
-            #         self._last_token, self._last_token_kind = '/', TokenKind.Other
-            #     return
-            elif self.last_char() == '"':
-                self.process_char()
-                string = ''
-                while self.last_char() != '"':
-                    if self.last_char() == '\\':
-                        self.process_char()
-                    if self.last_char() is None:
-                        raise ValueError(f'Unterminated string in {self.filename}[{self.cur_line + 1}:{self.cur_pose + 1}]')
-                    string += self.last_char()
-                    self.process_char()
-                self.process_char()
-                self._last_token, self._last_token_kind = string, TokenKind.String
-                return
+        if self.cur_char() is None:
+            self._last_token, self._last_token_kind = None, TokenKind.EOF
+        elif self.cur_char().isidentifier():
+            identifier = ''
+            while self.cur_char() is not None and (identifier + self.cur_char()).isidentifier():
+                identifier += self.cur_char()
+                self.drop_char()
+            self._last_token, self._last_token_kind = identifier, TokenKind.Identifier
+        elif self.cur_char().isdigit():
+            number_str = ''
+            while self.cur_char() is not None and self._number_pattern.fullmatch(number_str + self.cur_char()) is not None:
+                number_str += self.cur_char()
+                self.drop_char()
+            if '.' in number_str:
+                self._last_token, self._last_token_kind = float(number_str), TokenKind.Number
             else:
-                self._last_token, self._last_token_kind = self.last_char(), TokenKind.Other
-                self.process_char()
-                return
-        self._last_token, self._last_token_kind = None, TokenKind.EOF
+                self._last_token, self._last_token_kind = int(number_str), TokenKind.Number
+        elif self.cur_char() == '"':
+            self.drop_char()
+            string = ''
+            while self.cur_char() is not None and self.cur_char() != '"':
+                if self.cur_char() == '\\':
+                    self.drop_char()
+                string += self.cur_char()
+                self.drop_char()
+            self.drop_char('"')
+            self._last_token, self._last_token_kind = string, TokenKind.String
+        else:
+            self._last_token, self._last_token_kind = self.cur_char(), TokenKind.Other
+            self.drop_char()
+
+
 
 
 class Serializable:

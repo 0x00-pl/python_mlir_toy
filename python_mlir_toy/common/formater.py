@@ -18,7 +18,7 @@ class StrFormat(Format):
 
     def parse(self, src: serializable.TextParser):
         ret = src.last_token()
-        src.process_token()
+        src.drop_token()
         return ret
 
 
@@ -28,12 +28,15 @@ class NamespacedSymbolFormat(Format):
         dst.print(obj)
 
     def parse(self, src: serializable.TextParser):
+        assert src.last_token_kind() == serializable.TokenKind.Identifier
         symbol_name = src.last_token()
-        src.process_token(check_kind=serializable.TokenKind.Identifier, skip_space=False)
+        src.drop_token(skip_space=False)
         while src.last_token() == '.':
-            src.process_token(skip_space=False)
+            src.drop_token(skip_space=False)
             symbol_name += '.' + src.last_token()
-            src.process_token(check_kind=serializable.TokenKind.Identifier, skip_space=False)
+            src.drop_token(check_kind=serializable.TokenKind.Identifier, skip_space=False)
+        if src.last_token().isspace() or (src.last_token() == '/' and src.cur_char() == '/'):
+            src.drop_token()
         return symbol_name
 
 
@@ -47,9 +50,9 @@ class VariableNameFormat(Format):
         dst.print(obj)
 
     def parse(self, src: serializable.TextParser):
-        src.process_token(self.prefix, skip_space=False)
+        src.drop_token(self.prefix, skip_space=False)
         variable_name = src.last_token()
-        src.process_token()
+        src.drop_token(check_kind=serializable.TokenKind.Identifier)
         return self.prefix + variable_name
 
 
@@ -70,7 +73,7 @@ class ConstantStrFormat(Format):
         dst.print(self.text)
 
     def parse(self, src: serializable.TextParser):
-        src.process_token(self.text.strip())
+        src.drop_token(self.text.strip())
 
 
 class ListFormat(Format):

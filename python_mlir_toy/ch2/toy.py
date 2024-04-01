@@ -31,7 +31,7 @@ def dump_ast(args):
 def dump_mlir(args):
     if args.input_file.name.endswith('.mlir'):
         parser = scoped_text_parser.ScopedTextParser(args.input_file, args.input_file.name)
-        mlir_module = mlir_op.ModuleOp.parse(parser)
+        mlir_module = mlir_op.parse_module(parser)
         mlir_module.dump()
     else:
         lexer = LexerBuffer(args.input_file, args.input_file.name)
