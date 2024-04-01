@@ -63,7 +63,9 @@ class Op(serializable.TextSerializable):
     op_name: str = None
     op_type_dict: typing.Dict[str, typing.Type['Op']] = {}
 
-    _results_name_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
+    _variable_name_format = formater.VariableNameFormat('%')
+    _function_name_format = formater.VariableNameFormat('@')
+    _results_name_format = formater.RepeatFormat(_variable_name_format, ', ')
     _op_name_format = formater.NamespacedSymbolFormat()
 
     @staticmethod
@@ -145,7 +147,7 @@ class FuncOp(Op):
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
         with dst:
-            dst.print('@', self.function_name, '(', sep='', end='')
+            dst.print(self.function_name, '(', sep='', end='')
             for arg_name, arg_ty in tools.with_sep(zip(self.arg_name_list, self.function_type.inputs),
                                                    (lambda: dst.print(', '))):
                 arg_loc = None
@@ -181,33 +183,43 @@ class FuncOp(Op):
 
     @classmethod
     def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'FuncOp':
-        pass
+        with src:
+            loc = location.FileLineColLocation(*src.last_location())
+            function_name = Op._function_name_format.parse(src)
+            arg_name_list = []
+            arg_ty_list = []
+            output_ty_list = []
+            src.process_token('(')
+            while src.last_token() != ')':
+                if src.last_token() == ',':
+                    src.process_token()
+                arg_name = Op._variable_name_format.parse(src)
+                src.process_token(':')
+                arg_ty = mlir_type.parse_type(src)
+                arg_name_list.append(arg_name)
+                arg_ty_list.append(arg_ty)
+            src.process_token(')')
+            if src.last_token() == '-':
+                src.process_token('-')
+                src.process_token('>')
+                output_ty_list = mlir_type.parse_type_list(src)
 
+            function_type = mlir_type.FunctionType(arg_ty_list, output_ty_list)
 
-# class ModuleFormat(OpFormat):
-#     def __init__(self):
-#         super().__init__(ModuleOp)
-#         self.function_arguments_format = formater.DictFormat(formater.VariableNameFormat('%'), formater.TypeFormat())
-#
-#     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
-#         assert isinstance(obj, ModuleOp)
-#         with dst:
-#             dst.print('{', end='\n')
-#             for operator in obj.blocks:
-#                 operator.print(dst)
-#             dst.print('}', end='\n')
-#
-#     def parse(self, src: scoped_text_parser.ScopedTextParser):
-#         loc = location.FileLineColLocation(*src.last_location())
-#         with src:
-#             op_list: typing.List[FuncOp] = []
-#             src.process_token('{')
-#             while src.last_token() != '}':
-#                 op = Op.parse(src)
-#                 assert isinstance(op, FuncOp)
-#                 op_list.append(op)
-#
-#             return ModuleOp(loc, 'no_name', {item.function_name: item for item in op_list})
+            op_list = []
+            src.process_token('{')
+            while src.last_token() != '}':
+                op_result_names = Op._results_name_format.parse(src)
+                src.process_token('=')
+                op_name = Op._op_name_format.parse(src)
+                op_cls = Op.get_op_cls(op_name)
+                op = op_cls.parse(src)
+                op_list.append(op)
+                for name, value in zip(op_result_names, op.results):
+                    src.define_var(name, value)
+
+            src.process_token('}')
+            return FuncOp(loc, function_name, arg_name_list, function_type, Block(op_list))
 
 
 class ModuleOp(Op):
