@@ -212,8 +212,9 @@ class TextParser:
             self.drop_char('"')
             self._last_token, self._last_token_kind = string, TokenKind.String
         else:
-            self._last_token, self._last_token_kind = self.cur_char(), TokenKind.Other
+            last_char = self.cur_char()
             self.drop_char()
+            self._last_token, self._last_token_kind = last_char, TokenKind.Other
 
 
 

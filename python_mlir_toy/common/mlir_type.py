@@ -196,12 +196,13 @@ class RankedTensorType(TensorType):
 
     @classmethod
     def parse(cls, src: TextParser):
-        src.drop_token('tensor')
+        assert src.last_token() == 'tensor'
         src.drop_space()
-        src.drop_token('<')
-        if src.last_char() == '*':
-            src.process_char('*')
-            src.process_char('x')
+        src.drop_char('<')
+        if src.cur_char() == '*':
+            src.drop_char()
+            src.drop_char('x')
+            src.drop_token()
             element_type = parse_type(src)
             src.drop_token('>')
             return TensorType(element_type)

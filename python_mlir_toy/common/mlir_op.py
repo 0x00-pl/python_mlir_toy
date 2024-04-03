@@ -67,6 +67,7 @@ class Op(serializable.TextSerializable):
     _function_name_format = formater.VariableNameFormat('@')
     _results_name_format = formater.RepeatFormat(_variable_name_format, ', ')
     _op_name_format = formater.NamespacedSymbolFormat()
+    _location_format = formater.LocationFormat()
 
     @staticmethod
     def register_op_cls(name: str, op_type: typing.Type['Op']):
@@ -196,6 +197,8 @@ class FuncOp(Op):
                 arg_name = Op._variable_name_format.parse(src)
                 src.drop_token(':')
                 arg_ty = mlir_type.parse_type(src)
+                if src.last_token() == 'loc':
+                    loc = Op._location_format.parse(src)
                 arg_name_list.append(arg_name)
                 arg_ty_list.append(arg_ty)
             src.drop_token(')')

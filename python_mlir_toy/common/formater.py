@@ -1,6 +1,6 @@
 import typing
 
-from python_mlir_toy.common import serializable, tools, mlir_type
+from python_mlir_toy.common import serializable, tools, mlir_type, location
 
 
 class Format:
@@ -21,6 +21,31 @@ class StrFormat(Format):
         src.drop_token()
         return ret
 
+
+class LocationFormat(Format):
+    def print(self, obj, dst: serializable.TextPrinter):
+        assert isinstance(obj, location.Location)
+        obj.print(dst)
+
+    def parse(self, src: serializable.TextParser):
+        src.drop_token('loc')
+        src.drop_token('(')
+        if src.last_token() == 'unknown':
+            ret = location.UnknownLocation()
+        elif src.last_token_kind() == serializable.TokenKind.String:
+            filename = src.last_token()
+            src.drop_token()
+            src.drop_token(':')
+            line = src.last_token()
+            src.drop_token()
+            src.drop_token(':')
+            column = src.last_token()
+            src.drop_token()
+            ret = location.FileLineColLocation(filename, line, column)
+        else:
+            raise ValueError('Unknown location format')
+        src.drop_token(')')
+        return ret
 
 class NamespacedSymbolFormat(Format):
     def print(self, obj, dst: serializable.TextPrinter):
