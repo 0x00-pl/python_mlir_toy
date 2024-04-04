@@ -76,8 +76,8 @@ class VariableNameFormat(Format):
 
     def parse(self, src: serializable.TextParser):
         src.drop_token(self.prefix, skip_space=False)
-        variable_name = src.last_token()
-        src.drop_token(check_kind=serializable.TokenKind.Identifier)
+        variable_name = str(src.last_token())
+        src.drop_token()
         return self.prefix + variable_name
 
 
@@ -126,10 +126,10 @@ class RepeatFormat(Format):
             self.content_format.print(content, dst)
 
     def parse(self, src: serializable.TextParser) -> typing.List[typing.Any]:
-        ret = []
-        while src.last_token() is not self.sep_format.text.strip():
+        ret = [self.content_format.parse(src)]
+        while src.last_token() is self.sep_format.text.strip():
+            self.sep_format.parse(src)
             ret.append(self.content_format.parse(src))
-            ret.append(self.sep_format.parse(src))
         return ret
 
 

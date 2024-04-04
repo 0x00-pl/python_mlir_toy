@@ -106,13 +106,7 @@ class Op(serializable.TextSerializable):
 
     @classmethod
     def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'Op':
-        result_names = Op._results_name_format.parse(src)
-        op_name = Op._op_name_format.parse(src)
-        op_cls = Op.get_op_cls(op_name)
-        new_op = op_cls.parse_assembly_format(src)
-        for name, value in zip(result_names, new_op.results):
-            src.define_var(name, value)
-        return new_op
+        return cls.parse_assembly_format(src)
 
     @classmethod
     def parse_assembly_format(cls, src: scoped_text_parser.ScopedTextParser):

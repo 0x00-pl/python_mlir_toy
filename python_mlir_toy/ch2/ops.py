@@ -195,6 +195,7 @@ class TransposeOp(ToyOp):
             result_type = mlir_type.F64TensorType()
         super().__init__(loc, operands=[operand], result_types=[result_type])
 
+    @classmethod
     def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
         return ['(', cls.operand_name_format(0), ' : ', cls.operand_type_format(0), ')', cls.attr_dict_format(),
                 ' to ', cls.result_types_format()]
