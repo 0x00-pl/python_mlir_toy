@@ -1,7 +1,8 @@
 import typing
 from typing import List, Optional, Tuple
 
-from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, scoped_text_printer, tools, formater
+from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, scoped_text_printer, tools, formater, \
+    scoped_text_parser
 from python_mlir_toy.common.serializable import TextParser
 
 
@@ -45,57 +46,53 @@ class ToyFuncOp(ToyOp, mlir_op.FuncOp):
         self.arg_name_list = arg_name_list
         assert len(arg_name_list) == len(function_type.inputs)
 
-    def get_operand_types(self):
-        return self.function_type.inputs
-
-    def get_result_types(self):
-        return self.function_type.outputs
-
-    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
-        assembly_format = super().get_assembly_format()
-        assembly_format.append((cls.print_content, NotImplemented))
-        return assembly_format
-
-    def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):
-        dst.print(self.function_name, end='')
-        argument_dict = {}
-        with dst:
-            dst.print('(', end='')
-            for idx, arg_value in enumerate(tools.with_sep(self.blocks[0].arguments, lambda: dst.print(','))):
-                if isinstance(self.arg_name_list[idx], str):
-                    arg_name = dst.next_unused_symbol('%arg')
-                    arg_loc = None
-                elif isinstance(self.arg_name_list[idx], tuple):
-                    arg_name = dst.next_unused_symbol('%arg')
-                    arg_loc = self.arg_name_list[idx][1]
-
-                dst.insert_value_name(arg_value, arg_name)
-                argument_dict[arg_name] = arg_value
-                dst.print(arg_name, ': ', sep='', end='')
-                arg_value.ty.print(dst)
-                if arg_loc is not None:
-                    dst.print()
-                    arg_loc.print(dst)
-            dst.print(')')
-        if len(self.function_type.outputs) > 0:
-            dst.print('->')
-            if len(self.function_type.outputs) == 1:
-                self.function_type.outputs[0].print(dst)
-                dst.print()
-            else:
-                dst.print('(', end='')
-                for result_type in tools.with_sep(self.function_type.outputs, lambda: dst.print(',')):
-                    result_type.print(dst)
-                    dst.print()
-                dst.print(')')
-
-        dst.print('{', end='\n')
-        with dst:
-            for name, value in argument_dict.items():
-                dst.insert_value_name(value, name)
-            self.blocks[0].print(dst)
-        dst.print_ident()
-        dst.print('}', end='')
+    # def get_operand_types(self):
+    #     return self.function_type.inputs
+    #
+    # def get_result_types(self):
+    #     return self.function_type.outputs
+    #
+    #
+    # def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):
+    #     dst.print(self.function_name, end='')
+    #     argument_dict = {}
+    #     with dst:
+    #         dst.print('(', end='')
+    #         for idx, arg_value in enumerate(tools.with_sep(self.blocks[0].arguments, lambda: dst.print(','))):
+    #             if isinstance(self.arg_name_list[idx], str):
+    #                 arg_name = dst.next_unused_symbol('%arg')
+    #                 arg_loc = None
+    #             elif isinstance(self.arg_name_list[idx], tuple):
+    #                 arg_name = dst.next_unused_symbol('%arg')
+    #                 arg_loc = self.arg_name_list[idx][1]
+    #
+    #             dst.insert_value_name(arg_value, arg_name)
+    #             argument_dict[arg_name] = arg_value
+    #             dst.print(arg_name, ': ', sep='', end='')
+    #             arg_value.ty.print(dst)
+    #             if arg_loc is not None:
+    #                 dst.print()
+    #                 arg_loc.print(dst)
+    #         dst.print(')')
+    #     if len(self.function_type.outputs) > 0:
+    #         dst.print('->')
+    #         if len(self.function_type.outputs) == 1:
+    #             self.function_type.outputs[0].print(dst)
+    #             dst.print()
+    #         else:
+    #             dst.print('(', end='')
+    #             for result_type in tools.with_sep(self.function_type.outputs, lambda: dst.print(',')):
+    #                 result_type.print(dst)
+    #                 dst.print()
+    #             dst.print(')')
+    #
+    #     dst.print('{', end='\n')
+    #     with dst:
+    #         for name, value in argument_dict.items():
+    #             dst.insert_value_name(value, name)
+    #         self.blocks[0].print(dst)
+    #     dst.print_ident()
+    #     dst.print('}', end='')
 
 
 class GenericCallOp(ToyOp):
@@ -187,6 +184,31 @@ class ReturnOp(ToyOp, td.HasParent[ToyFuncOp]):
 class TransposeOp(ToyOp):
     op_name = 'toy.transpose'
 
+    class Format(formater.Format):
+        def __init__(self):
+            self.format_list = [
+                formater.ConstantStrFormat('('),
+                mlir_op.Op._variable_name_format,
+                formater.ConstantStrFormat(':'),
+                formater.TypeFormat(),
+                formater.ConstantStrFormat(')'),
+                formater.ConstantStrFormat(' to '),
+                formater.TypeFormat(),
+                formater.OptionalFormat(formater.LocationFormat(), (lambda loc: loc is not None), 'loc')
+            ]
+
+        def print(self, obj, dst: serializable.TextPrinter):
+            for fmt in self.format_list:
+                fmt.print(obj, dst)
+
+        def parse(self, src: scoped_text_parser.ScopedTextParser):
+            _, operand_name, _, operand_type, _, _, result_type, loc = [item.parse(src) for item in self.format_list]
+            operand = src.lookup_var(operand_name)
+            assert operand is not None
+            return TransposeOp(loc, [1, 0], operand)
+
+    _format = Format()
+
     def __init__(self, loc: location.Location, permutation: List[int], operand: td.Value):
         if isinstance(operand.ty, mlir_type.RankedTensorType):
             shape = operand.ty.shape
@@ -196,6 +218,5 @@ class TransposeOp(ToyOp):
         super().__init__(loc, operands=[operand], result_types=[result_type])
 
     @classmethod
-    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
-        return ['(', cls.operand_name_format(0), ' : ', cls.operand_type_format(0), ')', cls.attr_dict_format(),
-                ' to ', cls.result_types_format()]
+    def get_assembly_format(cls) -> Format:
+        return cls._format

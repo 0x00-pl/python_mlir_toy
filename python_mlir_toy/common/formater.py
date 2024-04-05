@@ -47,6 +47,7 @@ class LocationFormat(Format):
         src.drop_token(')')
         return ret
 
+
 class NamespacedSymbolFormat(Format):
     def print(self, obj, dst: serializable.TextPrinter):
         assert isinstance(obj, str)
@@ -127,7 +128,7 @@ class RepeatFormat(Format):
 
     def parse(self, src: serializable.TextParser) -> typing.List[typing.Any]:
         ret = [self.content_format.parse(src)]
-        while src.last_token() is self.sep_format.text.strip():
+        while src.last_token() == self.sep_format.text.strip():
             self.sep_format.parse(src)
             ret.append(self.content_format.parse(src))
         return ret

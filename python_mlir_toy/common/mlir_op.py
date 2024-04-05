@@ -52,7 +52,7 @@ class OpFormat(formater.Format):
         self.results_ty_format.print(result_type_list, dst)
 
     def parse(self, src: scoped_text_parser.ScopedTextParser):
-        loc = location.FileLineColLocation(*src.last_location())
+        loc = location.FileLineColLocation(*src.get_location())
         operand_names = self.operands_format.parse(src)
         operands = [src.lookup_var(operand_name) for operand_name in operand_names]
         result_types = self.results_ty_format.parse(src)
@@ -95,23 +95,11 @@ class Op(serializable.TextSerializable):
         return OpFormat(cls)
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        result_names = list(dst.insert_value_and_generate_name(item) for item in self.results)
-        Op._results_name_format.print(result_names, dst)
-        Op._op_name_format.print(self.op_name, dst)
-        self.print_assembly_format(dst)
-
-    def print_assembly_format(self, dst: scoped_text_printer.ScopedTextPrinter):
-        assembly_format = self.get_assembly_format()
-        assembly_format.print(self, dst)
+        self.get_assembly_format().print(self, dst)
 
     @classmethod
     def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'Op':
-        return cls.parse_assembly_format(src)
-
-    @classmethod
-    def parse_assembly_format(cls, src: scoped_text_parser.ScopedTextParser):
-        assembly_format = cls.get_assembly_format()
-        return assembly_format.parse(src)
+        return cls.get_assembly_format().parse(src)
 
 
 class Block(serializable.TextSerializable):
@@ -201,9 +189,12 @@ class FuncOp(Op):
                 src.drop_token('>')
                 output_ty_list = mlir_type.parse_type_list(src)
 
+            block = Block(arg_ty_list)
+            for name, value in zip(arg_name_list, block.arguments):
+                src.define_var(name, value)
+
             function_type = mlir_type.FunctionType(arg_ty_list, output_ty_list)
 
-            op_list = []
             src.drop_token('{')
             while src.last_token() != '}':
                 op_result_names = Op._results_name_format.parse(src)
@@ -211,12 +202,12 @@ class FuncOp(Op):
                 op_name = Op._op_name_format.parse(src)
                 op_cls = Op.get_op_cls(op_name)
                 op = op_cls.parse(src)
-                op_list.append(op)
+                block.op_list.append(op)
                 for name, value in zip(op_result_names, op.results):
                     src.define_var(name, value)
 
             src.drop_token('}')
-            return FuncOp(loc, function_name, arg_name_list, function_type, Block(op_list))
+            return FuncOp(loc, function_name, arg_name_list, function_type, block)
 
 
 class ModuleOp(Op):
