@@ -11,6 +11,18 @@ class Format:
         return None
 
 
+class CustomFormat(Format):
+    def __init__(self, f_print, f_parse):
+        self._print = f_print
+        self._parse = f_parse
+
+    def print(self, obj, dst: serializable.TextPrinter):
+        self._print(obj, dst)
+
+    def parse(self, src: serializable.TextParser):
+        return self._parse(src)
+
+
 class StrFormat(Format):
     def print(self, obj, dst: serializable.TextPrinter):
         assert isinstance(obj, str)
