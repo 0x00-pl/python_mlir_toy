@@ -1,7 +1,7 @@
 import typing
 from typing import List, Optional, Tuple
 
-from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, scoped_text_printer, tools, formater, \
+from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, formater, \
     scoped_text_parser
 from python_mlir_toy.common.serializable import TextParser
 
@@ -46,53 +46,7 @@ class ToyFuncOp(ToyOp, mlir_op.FuncOp):
         self.arg_name_list = arg_name_list
         assert len(arg_name_list) == len(function_type.inputs)
 
-    # def get_operand_types(self):
-    #     return self.function_type.inputs
-    #
-    # def get_result_types(self):
-    #     return self.function_type.outputs
-    #
-    #
-    # def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):
-    #     dst.print(self.function_name, end='')
-    #     argument_dict = {}
-    #     with dst:
-    #         dst.print('(', end='')
-    #         for idx, arg_value in enumerate(tools.with_sep(self.blocks[0].arguments, lambda: dst.print(','))):
-    #             if isinstance(self.arg_name_list[idx], str):
-    #                 arg_name = dst.next_unused_symbol('%arg')
-    #                 arg_loc = None
-    #             elif isinstance(self.arg_name_list[idx], tuple):
-    #                 arg_name = dst.next_unused_symbol('%arg')
-    #                 arg_loc = self.arg_name_list[idx][1]
-    #
-    #             dst.insert_value_name(arg_value, arg_name)
-    #             argument_dict[arg_name] = arg_value
-    #             dst.print(arg_name, ': ', sep='', end='')
-    #             arg_value.ty.print(dst)
-    #             if arg_loc is not None:
-    #                 dst.print()
-    #                 arg_loc.print(dst)
-    #         dst.print(')')
-    #     if len(self.function_type.outputs) > 0:
-    #         dst.print('->')
-    #         if len(self.function_type.outputs) == 1:
-    #             self.function_type.outputs[0].print(dst)
-    #             dst.print()
-    #         else:
-    #             dst.print('(', end='')
-    #             for result_type in tools.with_sep(self.function_type.outputs, lambda: dst.print(',')):
-    #                 result_type.print(dst)
-    #                 dst.print()
-    #             dst.print(')')
-    #
-    #     dst.print('{', end='\n')
-    #     with dst:
-    #         for name, value in argument_dict.items():
-    #             dst.insert_value_name(value, name)
-    #         self.blocks[0].print(dst)
-    #     dst.print_ident()
-    #     dst.print('}', end='')
+    # def get_operand_types(self):  #     return self.function_type.inputs  #  # def get_result_types(self):  #     return self.function_type.outputs  #  #  # def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):  #     dst.print(self.function_name, end='')  #     argument_dict = {}  #     with dst:  #         dst.print('(', end='')  #         for idx, arg_value in enumerate(tools.with_sep(self.blocks[0].arguments, lambda: dst.print(','))):  #             if isinstance(self.arg_name_list[idx], str):  #                 arg_name = dst.next_unused_symbol('%arg')  #                 arg_loc = None  #             elif isinstance(self.arg_name_list[idx], tuple):  #                 arg_name = dst.next_unused_symbol('%arg')  #                 arg_loc = self.arg_name_list[idx][1]  #  #             dst.insert_value_name(arg_value, arg_name)  #             argument_dict[arg_name] = arg_value  #             dst.print(arg_name, ': ', sep='', end='')  #             arg_value.ty.print(dst)  #             if arg_loc is not None:  #                 dst.print()  #                 arg_loc.print(dst)  #         dst.print(')')  #     if len(self.function_type.outputs) > 0:  #         dst.print('->')  #         if len(self.function_type.outputs) == 1:  #             self.function_type.outputs[0].print(dst)  #             dst.print()  #         else:  #             dst.print('(', end='')  #             for result_type in tools.with_sep(self.function_type.outputs, lambda: dst.print(',')):  #                 result_type.print(dst)  #                 dst.print()  #             dst.print(')')  #  #     dst.print('{', end='\n')  #     with dst:  #         for name, value in argument_dict.items():  #             dst.insert_value_name(value, name)  #         self.blocks[0].print(dst)  #     dst.print_ident()  #     dst.print('}', end='')
 
 
 class GenericCallOp(ToyOp):
@@ -145,6 +99,14 @@ class MulOp(ToyOp):
         assert mlir_type.F64TensorType() <= lhs.ty
         assert mlir_type.F64TensorType() <= rhs.ty
 
+    @classmethod
+    def build_as_generic_op(cls, loc: location.Location, operands: typing.List[td.Value] = None,
+                            result_types: typing.List[mlir_type.Type] = None, blocks=None):
+        assert len(operands) == 2
+        assert len(result_types) == 1 or result_types is None
+        assert blocks is None
+        return cls(loc, operands[0], operands[1])
+
 
 class PrintOp(ToyOp):
     op_name = 'toy.print'
@@ -164,8 +126,8 @@ class ReshapeOp(ToyOp):
         super().__init__(loc, operands=[operand], result_types=[mlir_type.RankedF64TensorType(shape)])
 
     def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
-        return ['(', cls.operand_name_format(0), ' : ', cls.operand_type_format(0), ')', cls.attr_dict_format(),
-                ' to ', cls.result_types_format()]
+        return ['(', cls.operand_name_format(0), ' : ', cls.operand_type_format(0), ')', cls.attr_dict_format(), ' to ',
+                cls.result_types_format()]
 
 
 class ReturnOp(ToyOp, td.HasParent[ToyFuncOp]):
@@ -186,16 +148,10 @@ class TransposeOp(ToyOp):
 
     class Format(formater.Format):
         def __init__(self):
-            self.format_list = [
-                formater.ConstantStrFormat('('),
-                mlir_op.Op._variable_name_format,
-                formater.ConstantStrFormat(':'),
-                formater.TypeFormat(),
-                formater.ConstantStrFormat(')'),
-                formater.ConstantStrFormat(' to '),
-                formater.TypeFormat(),
-                formater.OptionalFormat(formater.LocationFormat(), (lambda loc: loc is not None), 'loc')
-            ]
+            self.format_list = [formater.ConstantStrFormat('('), mlir_op.Op._variable_name_format,
+                formater.ConstantStrFormat(':'), formater.TypeFormat(), formater.ConstantStrFormat(')'),
+                formater.ConstantStrFormat(' to '), formater.TypeFormat(),
+                formater.OptionalFormat(formater.LocationFormat(), (lambda loc: loc is not None), 'loc')]
 
         def print(self, obj, dst: serializable.TextPrinter):
             for fmt in self.format_list:

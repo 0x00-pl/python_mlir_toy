@@ -40,7 +40,10 @@ class LocationFormat(Format):
         obj.print(dst)
 
     def parse(self, src: serializable.TextParser):
-        src.drop_token('loc')
+        if src.last_token() != 'loc':
+            return None
+
+        src.drop_token()
         src.drop_token('(')
         if src.last_token() == 'unknown':
             ret = location.UnknownLocation()
@@ -107,7 +110,7 @@ class ConstantStrFormat(Format):
     def __init__(self, text: str):
         self.text = text
 
-    def print(self, obj, dst: serializable.TextPrinter):
+    def print(self, _, dst: serializable.TextPrinter):
         dst.print(self.text)
 
     def parse(self, src: serializable.TextParser):

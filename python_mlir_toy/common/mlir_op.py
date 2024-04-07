@@ -14,12 +14,17 @@ class TypeFormat(formater.Format):
 
 
 class TypeListFormat(formater.Format):
-    def __init__(self, parentheses_required: bool):
+    def __init__(self, parentheses_required: bool, prefix: str | formater.ConstantStrFormat = ' : '):
         self.types_format = formater.RepeatFormat(TypeFormat(), ', ')
+        self.prefix_format = formater.ConstantStrFormat(prefix) if isinstance(prefix, str) else prefix
         self.parentheses_required = parentheses_required
 
     def print(self, obj, dst: serializable.TextPrinter):
+        if obj is None:
+            return
+
         assert isinstance(obj, list)
+        self.prefix_format.print(serializable.empty, dst)
         if len(obj) != 1 or self.parentheses_required:
             dst.print('(')
             self.types_format.print(obj, dst)
@@ -28,7 +33,11 @@ class TypeListFormat(formater.Format):
             self.types_format.print(obj, dst)
 
     def parse(self, src: serializable.TextParser) -> typing.List[typing.Any]:
-        if src.last_char() == '(':
+        if src.last_token() != self.prefix_format.text.strip():
+            return []
+
+        self.prefix_format.parse(src)
+        if src.last_token() == '(':
             src.drop_token()
             ret = self.types_format.parse(src)
             src.drop_token(')')
@@ -37,37 +46,41 @@ class TypeListFormat(formater.Format):
         return ret
 
 
-class OpFormat(formater.Format):
-    def __init__(self, op_cls: typing.Type['Op']):
-        self.operands_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
-        self.results_ty_format = formater.OptionalFormat(
-            formater.ListFormat([formater.ConstantStrFormat(' : '), TypeListFormat(parentheses_required=False)]),
-            (lambda result_type_list: len(result_type_list) > 0), ':')
-        self.op_cls = op_cls
-
-    def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
-        operand_names = (dst.lookup_value_name(item) for item in obj.operands)
-        self.operands_format.print(operand_names, dst)
-        result_type_list = list(item.ty for item in obj.results)
-        self.results_ty_format.print(result_type_list, dst)
-
-    def parse(self, src: scoped_text_parser.ScopedTextParser):
-        loc = location.FileLineColLocation(*src.get_location())
-        operand_names = self.operands_format.parse(src)
-        operands = [src.lookup_var(operand_name) for operand_name in operand_names]
-        result_types = self.results_ty_format.parse(src)
-        return self.op_cls(loc, operands, result_types)
+#
+#
+# class OpFormat(formater.Format):
+#     def __init__(self, op_cls: typing.Type['Op']):
+#         self.operands_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
+#         self.results_ty_format = formater.OptionalFormat(
+#             formater.ListFormat([formater.ConstantStrFormat(' : '), TypeListFormat(parentheses_required=False)]),
+#             (lambda result_type_list: len(result_type_list) > 0), ':')
+#         self.op_cls = op_cls
+#
+#     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
+#         operand_names = (dst.lookup_value_name(item) for item in obj.operands)
+#         self.operands_format.print(operand_names, dst)
+#         result_type_list = list(item.ty for item in obj.results)
+#         self.results_ty_format.print(result_type_list, dst)
+#
+#     def parse(self, src: scoped_text_parser.ScopedTextParser):
+#         loc = location.FileLineColLocation(*src.get_location())
+#         operand_names = self.operands_format.parse(src)
+#         operands = [src.lookup_var(operand_name) for operand_name in operand_names]
+#         result_types = self.results_ty_format.parse(src)
+#         return self.op_cls(loc, operands, result_types)
 
 
 class Op(serializable.TextSerializable):
     op_name: str = None
     op_type_dict: typing.Dict[str, typing.Type['Op']] = {}
 
+    _location_format = formater.LocationFormat()
     _variable_name_format = formater.VariableNameFormat('%')
     _function_name_format = formater.VariableNameFormat('@')
     _results_name_format = formater.RepeatFormat(_variable_name_format, ', ')
     _op_name_format = formater.NamespacedSymbolFormat()
-    _location_format = formater.LocationFormat()
+    _operands_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
+    _results_ty_format = TypeListFormat(parentheses_required=False)
 
     @staticmethod
     def register_op_cls(name: str, op_type: typing.Type['Op']):
@@ -91,8 +104,26 @@ class Op(serializable.TextSerializable):
         self.blocks = blocks if blocks else []
 
     @classmethod
+    def build_as_generic_op(cls, loc: location.Location, operands: typing.List[td.Value] = None,
+                            result_types: typing.List[mlir_type.Type] = None, blocks: typing.List['Block'] = None):
+        return cls(loc, operands, result_types, blocks)
+
+    @classmethod
     def get_assembly_format(cls) -> formater.Format:
-        return OpFormat(cls)
+        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
+            operand_names = (dst.lookup_value_name(item) for item in obj.operands)
+            cls._operands_format.print(operand_names, dst)
+            result_type_list = list(item.ty for item in obj.results)
+            cls._results_ty_format.print(result_type_list, dst)
+
+        def _parse_op(src: scoped_text_parser.ScopedTextParser):
+            operand_names = cls._operands_format.parse(src)
+            operands = [src.lookup_var(operand_name) for operand_name in operand_names]
+            result_types = cls._results_ty_format.parse(src)
+            loc = cls._location_format.parse(src)
+            return cls.build_as_generic_op(loc, operands, result_types)
+
+        return formater.CustomFormat(_print_op, _parse_op)
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
         self.get_assembly_format().print(self, dst)
@@ -197,12 +228,17 @@ class FuncOp(Op):
 
             src.drop_token('{')
             while src.last_token() != '}':
-                op_result_names = Op._results_name_format.parse(src)
-                src.drop_token('=')
+                if src.last_token() == '%':
+                    op_result_names = Op._results_name_format.parse(src)
+                    src.drop_token('=')
+                else:
+                    op_result_names = []
+
                 op_name = Op._op_name_format.parse(src)
                 op_cls = Op.get_op_cls(op_name)
                 op = op_cls.parse(src)
                 block.op_list.append(op)
+
                 for name, value in zip(op_result_names, op.results):
                     src.define_var(name, value)
 
