@@ -1,8 +1,8 @@
 import typing
 from typing import List, Optional, Tuple
 
-from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, formater, \
-    scoped_text_parser
+from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, formater, scoped_text_parser, \
+    scoped_text_printer
 from python_mlir_toy.common.serializable import TextParser
 
 
@@ -136,11 +136,27 @@ class ReturnOp(ToyOp, td.HasParent[ToyFuncOp]):
     def __init__(self, loc: location.Location, operand: Optional[td.Value] = None):
         super().__init__(loc, operands=([operand]) if operand is not None else [])
 
-    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
-        if len(cls.operands) == 0:
-            return [cls.attr_dict_format()]
-        else:
-            return [cls.operand_name_format(0), ' : ', cls.operand_type_format(0), cls.attr_dict_format()]
+    @classmethod
+    def get_assembly_format(cls) -> formater.Format:
+        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
+            if len(obj.operands) > 0:
+                operand_names = (dst.lookup_value_name(item) for item in obj.operands)
+                cls._operands_format.print(operand_names, dst)
+                result_type_list = list(item.ty for item in obj.results)
+                cls._results_ty_format.print(result_type_list, dst)
+
+        def _parse_op(src: scoped_text_parser.ScopedTextParser):
+            if src.last_token() == '%':
+                operand_names = cls._operands_format.parse(src)
+                operands = [src.lookup_var(operand_name) for operand_name in operand_names]
+                _ = cls._results_ty_format.parse(src)
+            else:
+                operands = []
+
+            loc = cls._location_format.parse(src)
+            return cls(loc, operands[0])
+
+        return formater.CustomFormat(_print_op, _parse_op)
 
 
 class TransposeOp(ToyOp):
@@ -149,9 +165,10 @@ class TransposeOp(ToyOp):
     class Format(formater.Format):
         def __init__(self):
             self.format_list = [formater.ConstantStrFormat('('), mlir_op.Op._variable_name_format,
-                formater.ConstantStrFormat(':'), formater.TypeFormat(), formater.ConstantStrFormat(')'),
-                formater.ConstantStrFormat(' to '), formater.TypeFormat(),
-                formater.OptionalFormat(formater.LocationFormat(), (lambda loc: loc is not None), 'loc')]
+                                formater.ConstantStrFormat(':'), formater.TypeFormat(), formater.ConstantStrFormat(')'),
+                                formater.ConstantStrFormat(' to '), formater.TypeFormat(),
+                                formater.OptionalFormat(formater.LocationFormat(), (lambda loc: loc is not None),
+                                                        'loc')]
 
         def print(self, obj, dst: serializable.TextPrinter):
             for fmt in self.format_list:

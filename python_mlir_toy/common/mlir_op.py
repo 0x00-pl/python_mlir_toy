@@ -150,24 +150,22 @@ class Block(serializable.TextSerializable):
 class FuncOp(Op):
     op_name = 'func'
 
-    def __init__(self, loc: location.Location, function_name: str,
-                 arg_name_list: typing.List[typing.Tuple[str, location.Location] | str],
-                 function_type: mlir_type.FunctionType, block: Block):
+    def __init__(self, loc: location.Location, function_name: str, arg_name_list: typing.List[str],
+                 arg_loc_list: typing.List[location.Location | None] | None, function_type: mlir_type.FunctionType,
+                 block: Block):
         super().__init__(loc, blocks=[block])
         self.function_name = function_name
         self.function_type = function_type
         self.arg_name_list = arg_name_list
-        assert len(arg_name_list) == len(function_type.inputs)
+        self.arg_loc_list = arg_loc_list if arg_loc_list is not None else [None] * len(arg_name_list)
+        assert len(self.arg_name_list) == len(self.arg_loc_list)
+        assert len(self.arg_name_list) == len(self.function_type.inputs)
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
         with dst:
             dst.print(self.function_name, '(', sep='', end='')
-            for arg_name, arg_ty in tools.with_sep(zip(self.arg_name_list, self.function_type.inputs),
-                                                   (lambda: dst.print(', '))):
-                arg_loc = None
-                if isinstance(arg_name, tuple):
-                    arg_name, arg_loc = arg_name
-
+            for arg_name, arg_loc, arg_ty in tools.with_sep(
+                    zip(self.arg_name_list, self.arg_loc_list, self.function_type.inputs), (lambda: dst.print(', '))):
                 dst.insert_value_name(arg_ty, arg_name)
                 dst.print(arg_name, ': ', sep='', end='')
                 arg_ty.print(dst)
@@ -198,9 +196,9 @@ class FuncOp(Op):
     @classmethod
     def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'FuncOp':
         with src:
-            loc = location.FileLineColLocation(*src.get_location())
             function_name = Op._function_name_format.parse(src)
             arg_name_list = []
+            arg_loc_list = []
             arg_ty_list = []
             output_ty_list = []
             src.drop_token('(')
@@ -212,7 +210,11 @@ class FuncOp(Op):
                 arg_ty = mlir_type.parse_type(src)
                 if src.last_token() == 'loc':
                     loc = Op._location_format.parse(src)
+                else:
+                    loc = None
+
                 arg_name_list.append(arg_name)
+                arg_loc_list.append(loc)
                 arg_ty_list.append(arg_ty)
             src.drop_token(')')
             if src.last_token() == '-':
@@ -243,7 +245,8 @@ class FuncOp(Op):
                     src.define_var(name, value)
 
             src.drop_token('}')
-            return FuncOp(loc, function_name, arg_name_list, function_type, block)
+            loc = cls._location_format.parse(src)
+            return FuncOp(loc, function_name, arg_name_list, arg_loc_list, function_type, block)
 
 
 class ModuleOp(Op):
