@@ -128,7 +128,7 @@ class TextParser:
         self._last_token = None
         self._last_token_kind: TokenKind = TokenKind.Unknown
         self.drop_token()
-        self._number_pattern = re.compile(r'[-+]?(([0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?)|0[xo][0-9a-fA-F]+)')
+        self._number_pattern = re.compile(r'[-+]?(([0-9]*\.?[0-9]*([eE][-+]?[0-9]+)?)|0[xo][0-9a-fA-F]+)')
 
     def get_location(self):
         return self.filename, self.cur_line + 1, self.cur_pose + 1
@@ -158,7 +158,8 @@ class TextParser:
 
     def is_space_or_comment(self):
         is_space = self.cur_char() is not None and self.cur_char().isspace()
-        is_comment = self.cur_char() == '/' and self.cur_pose + 1 < len(self._line_buffer) and self._line_buffer[self.cur_pose + 1] == '/'
+        is_comment = self.cur_char() == '/' and self.cur_pose + 1 < len(self._line_buffer) and self._line_buffer[
+            self.cur_pose + 1] == '/'
         return is_space or is_comment
 
     def drop_space(self):
@@ -194,7 +195,8 @@ class TextParser:
             self._last_token, self._last_token_kind = identifier, TokenKind.Identifier
         elif self.cur_char().isdigit():
             number_str = ''
-            while self.cur_char() is not None and self._number_pattern.fullmatch(number_str + self.cur_char()) is not None:
+            while self.cur_char() is not None and self._number_pattern.fullmatch(
+                    number_str + self.cur_char()) is not None:
                 number_str += self.cur_char()
                 self.drop_char()
             if '.' in number_str:
@@ -217,14 +219,16 @@ class TextParser:
             self._last_token, self._last_token_kind = last_char, TokenKind.Other
 
 
-
-
 class Serializable:
     pass
 
 
 class TextSerializable(Serializable):
     def print(self, dst: TextPrinter):
+        raise NotImplementedError
+
+    @classmethod
+    def parse(cls, src: TextParser):
         raise NotImplementedError
 
     def dump(self):
@@ -236,10 +240,6 @@ class TextSerializable(Serializable):
         printer = TextPrinter(file=file)
         self.print(printer)
         return file.getvalue()
-
-    @classmethod
-    def parse(cls, src: TextParser):
-        raise NotImplementedError
 
 
 class Empty(TextSerializable):

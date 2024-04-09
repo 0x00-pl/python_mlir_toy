@@ -20,18 +20,33 @@ class ConstantOp(ToyOp):
         self.shape = shape
         self.values = values
 
-    def get_assembly_format(cls):
-        assembly_format = [' ', cls.literal_format(), ' : ', cls.result_types_format()]
-        return assembly_format
+    @classmethod
+    def get_assembly_format(cls) -> formater.Format:
+        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
+            operand_names = (dst.lookup_value_name(item) for item in obj.operands)
+            cls._operands_format.print(operand_names, dst)
+            result_type_list = list(item.ty for item in obj.results)
+            cls._results_ty_format.print(result_type_list, dst)
 
-    def literal_format(self):
-        def printer(dst: serializable.TextPrinter):
-            dst.print(f'dense<{self.values}>', end='')
+        def _parse_op(src: scoped_text_parser.ScopedTextParser):
+            literal = cls._literal_format.parse(src)
+            loc = cls._location_format.parse(src)
+            return cls(loc, literal.shape, literal.values)
 
-        def parser(src: serializable.TextParser):
-            raise NotImplementedError
+        return formater.CustomFormat(_print_op, _parse_op)
 
-        return printer, parser
+    # def get_assembly_format(cls):
+    #     assembly_format = [' ', cls.literal_format(), ' : ', cls.result_types_format()]
+    #     return assembly_format
+    #
+    # def literal_format(self):
+    #     def printer(dst: serializable.TextPrinter):
+    #         dst.print(f'dense<{self.values}>', end='')
+    #
+    #     def parser(src: serializable.TextParser):
+    #         raise NotImplementedError
+    #
+    #     return printer, parser
 
 
 class ToyFuncOp(ToyOp, mlir_op.FuncOp):

@@ -1,6 +1,6 @@
 import typing
 
-from python_mlir_toy.common import serializable, tools, mlir_type, location
+from python_mlir_toy.common import serializable, tools, mlir_type, mlir_literal, location
 
 
 class Format:
@@ -104,6 +104,15 @@ class TypeFormat(Format):
 
     def parse(self, src: serializable.TextParser):
         return mlir_type.parse_type(src)
+
+
+class LiteralFormat(Format):
+    def print(self, obj, dst: serializable.TextPrinter):
+        assert isinstance(obj, mlir_literal.Literal)
+        obj.print(dst)
+
+    def parse(self, src: serializable.TextParser):
+        return mlir_literal.parse_literal(src)
 
 
 class ConstantStrFormat(Format):

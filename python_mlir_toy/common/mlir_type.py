@@ -300,7 +300,6 @@ def parse_type_list(src: TextParser, sep: str = ','):
 
 
 def parse_type(src: TextParser):
-    src.drop_space()
     type_name: str = src.last_token()
     if type_name == 'unknown_type':
         src.drop_token()

@@ -74,6 +74,7 @@ class Op(serializable.TextSerializable):
     op_name: str = None
     op_type_dict: typing.Dict[str, typing.Type['Op']] = {}
 
+    _literal_format = formater.LiteralFormat()
     _location_format = formater.LocationFormat()
     _variable_name_format = formater.VariableNameFormat('%')
     _function_name_format = formater.VariableNameFormat('@')
