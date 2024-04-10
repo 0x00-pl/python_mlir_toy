@@ -197,30 +197,32 @@ class RankedTensorType(TensorType):
     @classmethod
     def parse(cls, src: TextParser):
         assert src.last_token() == 'tensor'
-        src.drop_space()
         src.drop_char('<')
         if src.cur_char() == '*':
             src.drop_char()
             src.drop_char('x')
-            src.drop_token()
+            src.drop_token('tensor')
             element_type = parse_type(src)
             src.drop_token('>')
             return TensorType(element_type)
 
         shape = []
         element_type = None
-        while src.last_char() != '>':
-            if src.last_char() == 'x':
-                src.process_char()
-            dim_str = ''
-            if src.last_char().isdigit():
-                while src.last_char().isdigit():
-                    dim_str += src.last_char()
-                    src.process_char()
+        while src.cur_char() != '>':
+            if src.cur_char() == 'x':
+                src.drop_char()
+
+            if src.cur_char().isdigit():
+                dim_str = ''
+                while src.cur_char().isdigit():
+                    dim_str += src.cur_char()
+                    src.drop_char()
                 shape.append(int(dim_str))
             else:
+                src.drop_token('tensor')
                 element_type = parse_type(src)
                 assert src.last_token() == '>'
+                break
         src.drop_token('>')
         assert element_type is not None
         return cls(element_type, shape)
