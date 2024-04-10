@@ -35,19 +35,6 @@ class ConstantOp(ToyOp):
 
         return formater.CustomFormat(_print_op, _parse_op)
 
-    # def get_assembly_format(cls):
-    #     assembly_format = [' ', cls.literal_format(), ' : ', cls.result_types_format()]
-    #     return assembly_format
-    #
-    # def literal_format(self):
-    #     def printer(dst: serializable.TextPrinter):
-    #         dst.print(f'dense<{self.values}>', end='')
-    #
-    #     def parser(src: serializable.TextParser):
-    #         raise NotImplementedError
-    #
-    #     return printer, parser
-
 
 class ToyFuncOp(ToyOp, mlir_op.FuncOp):
     op_name = 'toy.func'
@@ -140,9 +127,32 @@ class ReshapeOp(ToyOp):
     def __init__(self, loc: location.Location, shape: List[int], operand: td.Value):
         super().__init__(loc, operands=[operand], result_types=[mlir_type.RankedF64TensorType(shape)])
 
-    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
-        return ['(', cls.operand_name_format(0), ' : ', cls.operand_type_format(0), ')', cls.attr_dict_format(), ' to ',
-                cls.result_types_format()]
+    @classmethod
+    def get_assembly_format(cls) -> formater.Format:
+        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
+            operand_name = dst.lookup_value_name(obj.operands[0])
+            assert operand_name is not None
+            dst.print('(', operand_name, ' : ')
+            obj.operands[0].ty.print(dst)
+            dst.print(')', ' to ')
+            obj.results[0].ty.print(dst)
+            cls._location_format.print(obj.location, dst)
+
+        def _parse_op(src: scoped_text_parser.ScopedTextParser):
+            src.drop_token('(')
+            operand_name = cls._variable_name_format.parse(src)
+            operand = src.lookup_var(operand_name)
+            src.drop_token(':')
+            operand.ty.parse(src)
+            src.drop_token(')')
+            src.drop_token('to')
+            result_type = mlir_type.parse_type(src)
+            assert isinstance(result_type, mlir_type.RankedTensorType)
+            shape = result_type.shape
+            loc = cls._location_format.parse(src)
+            return cls(loc, shape, operand)
+
+        return formater.CustomFormat(_print_op, _parse_op)
 
 
 class ReturnOp(ToyOp, td.HasParent[ToyFuncOp]):

@@ -80,7 +80,7 @@ class Op(serializable.TextSerializable):
     _function_name_format = formater.VariableNameFormat('@')
     _results_name_format = formater.RepeatFormat(_variable_name_format, ', ')
     _op_name_format = formater.NamespacedSymbolFormat()
-    _operands_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
+    _operands_format = formater.RepeatFormat(_variable_name_format, ', ')
     _results_ty_format = TypeListFormat(parentheses_required=False)
 
     @staticmethod
