@@ -278,8 +278,9 @@ class ModuleOp(Op):
                 assert isinstance(func_op, FuncOp)
                 func_value = td.ConstantValue(func_op.function_type, func_op)
                 src.define_var(func_op.function_name, func_value)
-                src.drop_token('}')
-                loc = Op._location_format.parse(src)
+
+            src.drop_token('}')
+            loc = Op._location_format.parse(src)
         return ModuleOp(loc, 'no_name', func_dict)
 
 
