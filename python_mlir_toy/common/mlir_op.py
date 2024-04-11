@@ -276,9 +276,11 @@ class ModuleOp(Op):
                 func_cls = Op.get_op_cls(func_op_name)
                 func_op = func_cls.parse(src)
                 assert isinstance(func_op, FuncOp)
-                func_dict[func_op.function_name] = func_op
-            src.drop_token('}')
-        return ModuleOp(src.last_location(), 'no_name', func_dict)
+                func_value = td.ConstantValue(func_op.function_type, func_op)
+                src.define_var(func_op.function_name, func_value)
+                src.drop_token('}')
+                loc = Op._location_format.parse(src)
+        return ModuleOp(loc, 'no_name', func_dict)
 
 
 def parse_module(src: scoped_text_parser.ScopedTextParser):

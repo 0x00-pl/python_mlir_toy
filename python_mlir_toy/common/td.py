@@ -10,6 +10,12 @@ class Value:
         self.ty = ty
 
 
+class ConstantValue(Value, typing.Generic[T]):
+    def __init__(self, ty: mlir_type.Type, value: T):
+        super().__init__(ty)
+        self.value = value
+
+
 class IsolatedFromAbove:
     def __init__(self):
         pass

@@ -48,22 +48,42 @@ class ToyFuncOp(ToyOp, mlir_op.FuncOp):
         self.arg_name_list = arg_name_list
         assert len(arg_name_list) == len(function_type.inputs)
 
-    # def get_operand_types(self):  #     return self.function_type.inputs  #  # def get_result_types(self):  #     return self.function_type.outputs  #  #  # def print_content(self, dst: scoped_text_printer.ScopedTextPrinter):  #     dst.print(self.function_name, end='')  #     argument_dict = {}  #     with dst:  #         dst.print('(', end='')  #         for idx, arg_value in enumerate(tools.with_sep(self.blocks[0].arguments, lambda: dst.print(','))):  #             if isinstance(self.arg_name_list[idx], str):  #                 arg_name = dst.next_unused_symbol('%arg')  #                 arg_loc = None  #             elif isinstance(self.arg_name_list[idx], tuple):  #                 arg_name = dst.next_unused_symbol('%arg')  #                 arg_loc = self.arg_name_list[idx][1]  #  #             dst.insert_value_name(arg_value, arg_name)  #             argument_dict[arg_name] = arg_value  #             dst.print(arg_name, ': ', sep='', end='')  #             arg_value.ty.print(dst)  #             if arg_loc is not None:  #                 dst.print()  #                 arg_loc.print(dst)  #         dst.print(')')  #     if len(self.function_type.outputs) > 0:  #         dst.print('->')  #         if len(self.function_type.outputs) == 1:  #             self.function_type.outputs[0].print(dst)  #             dst.print()  #         else:  #             dst.print('(', end='')  #             for result_type in tools.with_sep(self.function_type.outputs, lambda: dst.print(',')):  #                 result_type.print(dst)  #                 dst.print()  #             dst.print(')')  #  #     dst.print('{', end='\n')  #     with dst:  #         for name, value in argument_dict.items():  #             dst.insert_value_name(value, name)  #         self.blocks[0].print(dst)  #     dst.print_ident()  #     dst.print('}', end='')
-
 
 class GenericCallOp(ToyOp):
     op_name = 'toy.generic_call'
 
     def __init__(self, loc: location.Location, callee: ToyFuncOp, *inputs: td.Value):
-        super().__init__(loc, operands=list(inputs), result_types=callee.get_result_types())
+        super().__init__(loc, operands=list(inputs), result_types=callee.function_type.outputs)
         self.callee = callee
         # todo: verify callee input types
-        assert len(inputs) == len(callee.get_operand_types())
+        assert len(inputs) == len(callee.function_type.inputs)
 
-    def get_assembly_format(cls) -> typing.Optional[typing.List[typing.Any]]:
-        assembly_format = ['@', cls.function_name_format(), cls.operands_format(detail=True, show_type=False), ' : ',
-                           cls.function_type_format()]
-        return assembly_format
+    @classmethod
+    def get_assembly_format(cls) -> formater.Format:
+        def _print_op(obj: GenericCallOp, dst: scoped_text_printer.ScopedTextPrinter):
+            cls._function_name_format.print(dst)
+            dst.print('(')
+            operands_name = [dst.lookup_value_name(item) for item in obj.operands]
+            cls._operands_format.print(operands_name, dst)
+            dst.print(')', ' : ')
+            obj.callee.function_type.print(dst)
+            cls._location_format.print(obj.location, dst)
+
+        def _parse_op(src: scoped_text_parser.ScopedTextParser):
+            callee_name = cls._function_name_format.parse(src)
+            callee_value = src.lookup_var(callee_name)
+            assert isinstance(callee_value, td.ConstantValue)
+            assert isinstance(callee_value.ty, mlir_type.FunctionType)
+            src.drop_token('(')
+            operands_name = cls._operands_format.parse(src)
+            operands = [src.lookup_var(operands_name) for operands_name in operands_name]
+            src.drop_token(')')
+            src.drop_token(':')
+            function_type = mlir_type.parse_function_type(src)
+            loc = cls._location_format.parse(src)
+            return cls(loc, callee_value.value, *operands)
+
+        return formater.CustomFormat(_print_op, _parse_op)
 
     def function_name_format(self):
         def printer(dst: serializable.TextPrinter):
