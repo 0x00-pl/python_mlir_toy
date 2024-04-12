@@ -137,8 +137,21 @@ class PrintOp(ToyOp):
         super().__init__(loc, operands=[operand])
         assert mlir_type.F64TensorType() <= operand.ty
 
-    def print_content(self, dst: serializable.TextPrinter):
-        pass
+    @classmethod
+    def get_assembly_format(cls) -> formater.Format:
+        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
+            assert isinstance(obj, PrintOp)
+            operand_name = dst.lookup_value_name(obj.operands[0])
+            cls._variable_name_format.print(operand_name, dst)
+            cls._location_format.print(obj.location, dst)
+
+        def _parse_op(src: scoped_text_parser.ScopedTextParser):
+            operand_name = cls._variable_name_format.parse(src)
+            operand = src.lookup_var(operand_name)
+            loc = cls._location_format.parse(src)
+            return cls(loc, operand)
+
+        return formater.CustomFormat(_print_op, _parse_op)
 
 
 class ReshapeOp(ToyOp):
@@ -192,14 +205,14 @@ class ReturnOp(ToyOp, td.HasParent[ToyFuncOp]):
 
         def _parse_op(src: scoped_text_parser.ScopedTextParser):
             if src.last_token() == '%':
-                operand_names = cls._operands_format.parse(src)
-                operands = [src.lookup_var(operand_name) for operand_name in operand_names]
+                operand_name = cls._variable_name_format.parse(src)
+                operand = src.lookup_var(operand_name)
                 _ = cls._results_ty_format.parse(src)
             else:
-                operands = []
+                operand = None
 
             loc = cls._location_format.parse(src)
-            return cls(loc, operands[0])
+            return cls(loc, operand)
 
         return formater.CustomFormat(_print_op, _parse_op)
 

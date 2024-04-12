@@ -47,6 +47,7 @@ class LocationFormat(Format):
         src.drop_token('(')
         if src.last_token() == 'unknown':
             ret = location.UnknownLocation()
+            src.drop_token()
         elif src.last_token_kind() == serializable.TokenKind.String:
             filename = src.last_token()
             src.drop_token()
