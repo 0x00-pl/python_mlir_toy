@@ -61,7 +61,8 @@ class GenericCallOp(ToyOp):
     @classmethod
     def get_assembly_format(cls) -> formater.Format:
         def _print_op(obj: GenericCallOp, dst: scoped_text_printer.ScopedTextPrinter):
-            cls._function_name_format.print(dst)
+            assert isinstance(obj, GenericCallOp)
+            cls._function_name_format.print(obj.callee.function_name, dst)
             dst.print('(')
             operands_name = [dst.lookup_value_name(item) for item in obj.operands]
             cls._operands_format.print(operands_name, dst)
@@ -258,6 +259,7 @@ class TransposeOp(ToyOp):
             dst.print(':')
             cls._type_format.print(obj.operands[0].ty, dst)
             dst.print(')', ' to ')
+            cls._type_format.print(obj.results[0].ty, dst)
             cls._location_format.print(obj.location, dst)
 
         def _parse_op(src: scoped_text_parser.ScopedTextParser):
@@ -270,6 +272,8 @@ class TransposeOp(ToyOp):
             assert operand.ty <= operand_type
             src.drop_token(')')
             src.drop_token('to')
+            result_type = cls._type_format.parse(src)
+            assert isinstance(result_type, mlir_type.TensorType)
             loc = cls._location_format.parse(src)
             return TransposeOp(loc, [1, 0], operand)
 
