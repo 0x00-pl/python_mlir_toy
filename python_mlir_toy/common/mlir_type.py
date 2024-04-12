@@ -103,61 +103,62 @@ class ComplexType(Type):
         return cls(element_type)
 
 
-class VectorType(Type):
-    name = 'vector'
-
-    def __init__(self, element_type: Type, dims: typing.List[int], is_scalable_dims: typing.List[bool] = None):
-        self.element_type = element_type
-        self.dims = dims
-        self.is_scalable_dims = is_scalable_dims
-
-    def __le__(self, other):
-        if self.is_scalable_dims is not None or other.is_scalable_dims is not None:
-            return False
-        return super().__le__(other) and self.element_type == other.element_type and self.dims == other.dims
-
-    def print(self, dst: TextPrinter):
-        dst.print('vector<', end='')
-        for idx, dim in enumerate(tools.with_sep(self.dims, lambda: dst.print(','))):
-            if self.is_scalable_dims is not None and self.is_scalable_dims[idx]:
-                dst.print(f'[{dim}]', end='')
-            else:
-                dst.print(dim)
-        dst.print(f'x', end='')
-        self.element_type.print(dst)
-        dst.print('>', end='')
-
-    @classmethod
-    def parse(cls, src: TextParser):
-        src.drop_token('vector')
-        src.drop_space()
-        dims = []
-        is_scalable_dims = []
-        element_type = None
-        src.process_char('<')
-        while src.last_char() != '>':
-            src.process_char()
-            if src.last_char() == '[':
-                src.process_char()
-                num_str = ''
-                while src.last_char().isdigit():
-                    num_str += src.last_char()
-                    src.process_char()
-                src.process_char(']')
-                dims.append(int(num_str))
-                is_scalable_dims.append(True)
-            elif src.last_char().isdigit():
-                num_str = ''
-                while src.last_char().isdigit():
-                    num_str += src.last_char()
-                    src.process_char()
-                dims.append(int(num_str))
-                is_scalable_dims.append(False)
-            else:
-                element_type = parse_type(src)
-                break
-        src.drop_token('>')
-        return cls(element_type, dims, is_scalable_dims)
+#
+# class VectorType(Type):
+#     name = 'vector'
+#
+#     def __init__(self, element_type: Type, dims: typing.List[int], is_scalable_dims: typing.List[bool] = None):
+#         self.element_type = element_type
+#         self.dims = dims
+#         self.is_scalable_dims = is_scalable_dims
+#
+#     def __le__(self, other):
+#         if self.is_scalable_dims is not None or other.is_scalable_dims is not None:
+#             return False
+#         return super().__le__(other) and self.element_type == other.element_type and self.dims == other.dims
+#
+#     def print(self, dst: TextPrinter):
+#         dst.print('vector<', end='')
+#         for idx, dim in enumerate(tools.with_sep(self.dims, lambda: dst.print(','))):
+#             if self.is_scalable_dims is not None and self.is_scalable_dims[idx]:
+#                 dst.print(f'[{dim}]', end='')
+#             else:
+#                 dst.print(dim)
+#         dst.print(f'x', end='')
+#         self.element_type.print(dst)
+#         dst.print('>', end='')
+#
+#     @classmethod
+#     def parse(cls, src: TextParser):
+#         src.drop_token('vector')
+#         src.drop_space()
+#         dims = []
+#         is_scalable_dims = []
+#         element_type = None
+#         src.process_char('<')
+#         while src.last_char() != '>':
+#             src.process_char()
+#             if src.last_char() == '[':
+#                 src.process_char()
+#                 num_str = ''
+#                 while src.last_char().isdigit():
+#                     num_str += src.last_char()
+#                     src.process_char()
+#                 src.process_char(']')
+#                 dims.append(int(num_str))
+#                 is_scalable_dims.append(True)
+#             elif src.last_char().isdigit():
+#                 num_str = ''
+#                 while src.last_char().isdigit():
+#                     num_str += src.last_char()
+#                     src.process_char()
+#                 dims.append(int(num_str))
+#                 is_scalable_dims.append(False)
+#             else:
+#                 element_type = parse_type(src)
+#                 break
+#         src.drop_token('>')
+#         return cls(element_type, dims, is_scalable_dims)
 
 
 class TensorType(Type):
@@ -228,37 +229,38 @@ class RankedTensorType(TensorType):
         return cls(element_type, shape)
 
 
-class TupleType(Type):
-    name = 'tuple'
-
-    def __init__(self, types: typing.List[Type]):
-        self.types = types
-
-    def __le__(self, other):
-        return super().__le__(other) and all(t1 <= t2 for t1, t2 in zip(self.types, other.types))
-
-    def print(self, dst: TextPrinter):
-        dst.print('tuple<')
-        for input_ty in tools.with_sep(self.types, lambda: dst.print(', ')):
-            input_ty.print(dst)
-        dst.print('>')
-
-    @classmethod
-    def parse(cls, src: TextParser):
-        src.drop_token('tuple')
-        src.drop_space()
-        src.drop_token('<')
-        src.drop_token(')')
-        types = []
-        while src.last_char() != ')':
-            if src.last_char() == ',':
-                src.process_char()
-                src.drop_space()
-            sub_type = parse_type(src)
-            types.append(sub_type)
-        src.drop_token(')')
-        src.drop_token('>')
-        return cls(types)
+#
+# class TupleType(Type):
+#     name = 'tuple'
+#
+#     def __init__(self, types: typing.List[Type]):
+#         self.types = types
+#
+#     def __le__(self, other):
+#         return super().__le__(other) and all(t1 <= t2 for t1, t2 in zip(self.types, other.types))
+#
+#     def print(self, dst: TextPrinter):
+#         dst.print('tuple<')
+#         for input_ty in tools.with_sep(self.types, lambda: dst.print(', ')):
+#             input_ty.print(dst)
+#         dst.print('>')
+#
+#     @classmethod
+#     def parse(cls, src: TextParser):
+#         src.drop_token('tuple')
+#         src.drop_space()
+#         src.drop_token('<')
+#         src.drop_token(')')
+#         types = []
+#         while src.last_char() != ')':
+#             if src.last_char() == ',':
+#                 src.process_char()
+#                 src.drop_space()
+#             sub_type = parse_type(src)
+#             types.append(sub_type)
+#         src.drop_token(')')
+#         src.drop_token('>')
+#         return cls(types)
 
 
 class FunctionType(Type):

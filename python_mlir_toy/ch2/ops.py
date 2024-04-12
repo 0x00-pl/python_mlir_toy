@@ -1,37 +1,33 @@
 import typing
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, formater, scoped_text_parser, \
-    scoped_text_printer
+    scoped_text_printer, mlir_literal
 from python_mlir_toy.common.serializable import TextParser
 
 
-class ToyOp(mlir_op.Op):
-    def __init__(self, loc: location.Location, operands=None, result_types=None, blocks=None):
-        super().__init__(loc, operands, result_types, blocks)
+class ToyOp:
+    pass
 
 
-class ConstantOp(ToyOp):
+class ConstantOp(ToyOp, mlir_op.Op):
     op_name = 'toy.constant'
 
-    def __init__(self, loc: location.Location, shape: List[int], values: List[float]):
-        result_type = mlir_type.F64TensorType() if len(shape) == 0 else mlir_type.RankedF64TensorType(shape)
-        super().__init__(loc, result_types=[result_type])
-        self.shape = shape
-        self.values = values
+    def __init__(self, loc: location.Location, literal: mlir_literal.Literal):
+        super().__init__(loc, result_types=[literal.get_type()])
+        self.literal = literal
 
     @classmethod
     def get_assembly_format(cls) -> formater.Format:
         def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
-            operand_names = (dst.lookup_value_name(item) for item in obj.operands)
-            cls._operands_format.print(operand_names, dst)
-            result_type_list = list(item.ty for item in obj.results)
-            cls._results_ty_format.print(result_type_list, dst)
+            assert isinstance(obj, ConstantOp)
+            cls._literal_format.print(obj.literal, dst)
+            cls._location_format.print(obj.location, dst)
 
         def _parse_op(src: scoped_text_parser.ScopedTextParser):
             literal = cls._literal_format.parse(src)
             loc = cls._location_format.parse(src)
-            return cls(loc, literal.shape, literal.values)
+            return cls(loc, literal)
 
         return formater.CustomFormat(_print_op, _parse_op)
 
@@ -39,17 +35,8 @@ class ConstantOp(ToyOp):
 class ToyFuncOp(ToyOp, mlir_op.FuncOp):
     op_name = 'toy.func'
 
-    def __init__(self, loc: location.Location, function_name: str,
-                 arg_name_list: List[Tuple[str, location.Location] | str], function_type: mlir_type.FunctionType,
-                 block: mlir_op.Block):
-        super().__init__(loc, blocks=[block])
-        self.function_name = function_name
-        self.function_type = function_type
-        self.arg_name_list = arg_name_list
-        assert len(arg_name_list) == len(function_type.inputs)
 
-
-class GenericCallOp(ToyOp):
+class GenericCallOp(ToyOp, mlir_op.Op):
     op_name = 'toy.generic_call'
 
     def __init__(self, loc: location.Location, callee: ToyFuncOp, *inputs: td.Value):
@@ -66,7 +53,7 @@ class GenericCallOp(ToyOp):
             dst.print('(')
             operands_name = [dst.lookup_value_name(item) for item in obj.operands]
             cls._operands_format.print(operands_name, dst)
-            dst.print(')', ' : ')
+            dst.print(')', ':')
             obj.callee.function_type.print(dst)
             cls._location_format.print(obj.location, dst)
 
@@ -105,7 +92,7 @@ class GenericCallOp(ToyOp):
         return printer, parser
 
 
-class AddOp(ToyOp):
+class AddOp(ToyOp, mlir_op.Op):
     op_name = 'toy.add'
 
     def __init__(self, loc: location.Location, lhs: td.Value, rhs: td.Value):
@@ -114,7 +101,7 @@ class AddOp(ToyOp):
         assert mlir_type.F64TensorType() <= rhs.ty
 
 
-class MulOp(ToyOp):
+class MulOp(ToyOp, mlir_op.Op):
     op_name = 'toy.mul'
 
     def __init__(self, loc: location.Location, lhs: td.Value, rhs: td.Value):
@@ -131,7 +118,7 @@ class MulOp(ToyOp):
         return cls(loc, operands[0], operands[1])
 
 
-class PrintOp(ToyOp):
+class PrintOp(ToyOp, mlir_op.Op):
     op_name = 'toy.print'
 
     def __init__(self, loc: location.Location, operand: td.Value):
@@ -155,7 +142,7 @@ class PrintOp(ToyOp):
         return formater.CustomFormat(_print_op, _parse_op)
 
 
-class ReshapeOp(ToyOp):
+class ReshapeOp(ToyOp, mlir_op.Op):
     op_name = 'toy.reshape'
 
     def __init__(self, loc: location.Location, shape: List[int], operand: td.Value):
@@ -189,7 +176,7 @@ class ReshapeOp(ToyOp):
         return formater.CustomFormat(_print_op, _parse_op)
 
 
-class ReturnOp(ToyOp, td.HasParent[ToyFuncOp]):
+class ReturnOp(ToyOp, mlir_op.Op):
     op_name = 'toy.return'
 
     def __init__(self, loc: location.Location, operand: Optional[td.Value] = None):
@@ -218,7 +205,7 @@ class ReturnOp(ToyOp, td.HasParent[ToyFuncOp]):
         return formater.CustomFormat(_print_op, _parse_op)
 
 
-class TransposeOp(ToyOp):
+class TransposeOp(ToyOp, mlir_op.Op):
     op_name = 'toy.transpose'
 
     # class Format(formater.Format):

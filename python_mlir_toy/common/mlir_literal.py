@@ -11,6 +11,10 @@ class Literal(serializable.TextSerializable):
         if cls.name is not None:
             Literal.type_dict[cls.name] = cls
 
+    def get_type(self):
+        assert self.name is None
+        return mlir_type.NoneType()
+
     def print(self, dst: serializable.TextPrinter):
         if self.name is not None:
             dst.print(self.name, end='')
@@ -26,6 +30,9 @@ class Literal(serializable.TextSerializable):
 class FloatLiteral(Literal):
     def __init__(self, value: float):
         self.value = value
+
+    def get_type(self):
+        return mlir_type.Float64Type()
 
     def print(self, dst: serializable.TextPrinter):
         dst.print(self.value, end='')
@@ -43,6 +50,9 @@ class TensorLiteral(Literal):
     def __init__(self, shape: typing.List[int], values: typing.List[float]):
         self.shape = shape
         self.values = values
+
+    def get_type(self):
+        return mlir_type.RankedF64TensorType(self.shape)
 
     def print(self, dst: serializable.TextPrinter):
         dst.print(f'{self.name}<[', end='')
@@ -87,4 +97,3 @@ def parse_literal(src: serializable.TextParser):
         return Literal.type_dict[token].parse(src)
     else:
         raise NotImplementedError(f'Unsupported literal type: {token}')
-

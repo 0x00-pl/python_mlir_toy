@@ -169,29 +169,31 @@ class FuncOp(Op):
             dst.print(self.function_name, '(', sep='', end='')
             for arg_name, arg_loc, arg_ty, arg_value in tools.with_sep(
                     zip(self.arg_name_list, self.arg_loc_list, self.function_type.inputs, self.blocks[0].arguments),
-                    (lambda: dst.print(', '))):
+                    (lambda: dst.print(', ', end=''))):
                 dst.insert_value_name(arg_value, arg_name)
                 dst.print(arg_name, ': ', sep='', end='')
                 arg_ty.print(dst)
                 if arg_loc is not None:
-                    dst.print(' ')
+                    dst.print()
                     arg_loc.print(dst)
             dst.print(')')
             if len(self.function_type.outputs) != 0:
-                dst.print(' -> ')
+                dst.print('->')
                 if len(self.function_type.outputs) == 1:
                     self.function_type.outputs[0].print(dst)
                 else:
                     dst.print('(', end='')
                     mlir_type.print_type_list(dst, self.function_type.outputs)
                     dst.print(')')
+                dst.print()
 
             dst.print('{', end='\n')
             for op in self.blocks[0].op_list:
+                dst.print_ident()
                 result_names = [dst.insert_value_and_generate_name(item) for item in op.results]
                 Op._results_name_format.print(result_names, dst)
-                dst.print_ident()
-                dst.print(' = ', end='')
+                if len(result_names) > 0:
+                    dst.print('=')
                 dst.print(op.op_name)
                 op.print(dst)
                 dst.print(end='\n')
@@ -250,7 +252,7 @@ class FuncOp(Op):
 
             src.drop_token('}')
             loc = cls._location_format.parse(src)
-            return FuncOp(loc, function_name, arg_name_list, arg_loc_list, function_type, block)
+            return cls(loc, function_name, arg_name_list, arg_loc_list, function_type, block)
 
 
 class ModuleOp(Op):
@@ -263,13 +265,16 @@ class ModuleOp(Op):
 
     def dump(self):
         printer = scoped_text_printer.ScopedTextPrinter(file=sys.stdout)
+        self._op_name_format.print(self.op_name, printer)
         self.print(printer)
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
         with dst:
             dst.print('{', end='\n')
             for func in self.func_dict.values():
+                assert isinstance(func, FuncOp)
                 dst.print_ident()
+                func._op_name_format.print(func.op_name, dst)
                 func.print(dst)
             dst.print('}', end='')
 
@@ -279,8 +284,8 @@ class ModuleOp(Op):
         with src:
             src.drop_token('{')
             while src.last_token() != '}':
-                func_op_name = Op._op_name_format.parse(src)
-                func_cls = Op.get_op_cls(func_op_name)
+                func_op_name = cls._op_name_format.parse(src)
+                func_cls = cls.get_op_cls(func_op_name)
                 func_op = func_cls.parse(src)
                 assert isinstance(func_op, FuncOp)
                 func_value = td.ConstantValue(func_op.function_type, func_op)
@@ -288,7 +293,7 @@ class ModuleOp(Op):
                 func_dict[func_op.function_name] = func_op
 
             src.drop_token('}')
-            loc = Op._location_format.parse(src)
+            loc = cls._location_format.parse(src)
         return ModuleOp(loc, 'no_name', func_dict)
 
 
