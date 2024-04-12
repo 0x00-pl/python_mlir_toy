@@ -48,7 +48,7 @@ class MlirGenImpl:
             raise NotImplementedError
 
     def mlir_gen_module(self, module: ast.ModuleAST):
-        loc = location.UnknownLocation()
+        loc = self.location(module.location)
 
         for f in module.functions:
             self.mlir_gen_func(f)
@@ -64,7 +64,7 @@ class MlirGenImpl:
         for expr in block:
             self.mlir_gen(expr)
         if not isinstance(op_list[-1], ops.ReturnOp):
-            ret_op = ops.ReturnOp(location.UnknownLocation())
+            ret_op = ops.ReturnOp(op_list[-1].location)
             self.insert_op(ret_op)
         self.insert_point_list.pop(-1)
         return op_list

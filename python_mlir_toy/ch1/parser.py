@@ -305,6 +305,7 @@ class Parser:
         return FunctionAST(loc, proto, block)
 
     def parse_module(self):
+        loc = self.lexer.location.copy()
         functions = []
 
         while self.lexer.get_cur_token() != Token.EOF:
@@ -317,6 +318,6 @@ class Parser:
             return self.parse_error('end of file', 'at end of module')
         self.lexer.consume(Token.EOF)
 
-        return ModuleAST(self.lexer.location, functions)
+        return ModuleAST(loc, functions)
 
 
