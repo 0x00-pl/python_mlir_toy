@@ -207,27 +207,7 @@ class ReturnOp(ToyOp, mlir_op.Op):
 
 class TransposeOp(ToyOp, mlir_op.Op):
     op_name = 'toy.transpose'
-
-    # class Format(formater.Format):
-    #     def __init__(self):
-    #         self.format_list = [formater.ConstantStrFormat('('), mlir_op.Op._variable_name_format,
-    #                             formater.ConstantStrFormat(':'), formater.TypeFormat(), formater.ConstantStrFormat(')'),
-    #                             formater.ConstantStrFormat(' to '), formater.TypeFormat(),
-    #                             formater.OptionalFormat(formater.LocationFormat(), (lambda loc: loc is not None),
-    #                                                     'loc')]
-    #
-    #     def print(self, obj, dst: serializable.TextPrinter):
-    #         assert isinstance(obj, TransposeOp)
-    #         for fmt in self.format_list:
-    #             fmt.print(obj, dst)
-    #
-    #     def parse(self, src: scoped_text_parser.ScopedTextParser):
-    #         _, operand_name, _, operand_type, _, _, result_type, loc = [item.parse(src) for item in self.format_list]
-    #         operand = src.lookup_var(operand_name)
-    #         assert operand is not None
-    #         return TransposeOp(loc, [1, 0], operand)
-    #
-    # _format = Format()
+    _op_name_format = formater.NamespacedSymbolFormat(end='')
 
     def __init__(self, loc: location.Location, permutation: List[int], operand: td.Value):
         if isinstance(operand.ty, mlir_type.RankedTensorType):
@@ -241,12 +221,13 @@ class TransposeOp(ToyOp, mlir_op.Op):
     def get_assembly_format(cls) -> formater.Format:
         def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
             assert isinstance(obj, TransposeOp)
-            dst.print('(')
+            dst.print('(', end='')
             cls._variable_name_format.print(dst.lookup_value_name(obj.operands[0]), dst)
             dst.print(':')
             cls._type_format.print(obj.operands[0].ty, dst)
-            dst.print(')', ' to ')
+            dst.print(')', 'to')
             cls._type_format.print(obj.results[0].ty, dst)
+            dst.print()
             cls._location_format.print(obj.location, dst)
 
         def _parse_op(src: scoped_text_parser.ScopedTextParser):

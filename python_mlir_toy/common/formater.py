@@ -65,9 +65,15 @@ class LocationFormat(Format):
 
 
 class NamespacedSymbolFormat(Format):
+    def __init__(self, end: str | None = None):
+        self.end = end
+
     def print(self, obj, dst: serializable.TextPrinter):
         assert isinstance(obj, str)
-        dst.print(obj)
+        if self.end is None:
+            dst.print(obj)
+        else:
+            dst.print(obj, end=self.end)
 
     def parse(self, src: serializable.TextParser):
         assert src.last_token_kind() == serializable.TokenKind.Identifier

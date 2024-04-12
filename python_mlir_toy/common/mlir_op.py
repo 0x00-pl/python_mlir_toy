@@ -191,18 +191,18 @@ class FuncOp(Op):
             for op in self.blocks[0].op_list:
                 dst.print_ident()
                 result_names = [dst.insert_value_and_generate_name(item) for item in op.results]
-                Op._results_name_format.print(result_names, dst)
+                self._results_name_format.print(result_names, dst)
                 if len(result_names) > 0:
                     dst.print('=')
-                dst.print(op.op_name)
+                op._op_name_format.print(op.op_name, dst)
                 op.print(dst)
                 dst.print(end='\n')
             dst.print('}', end='\n')
 
     @classmethod
-    def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'FuncOp':
+    def parse(cls, src: scoped_text_parser.ScopedTextParser) -> typing.Self:
         with src:
-            function_name = Op._function_name_format.parse(src)
+            function_name = cls._function_name_format.parse(src)
             arg_name_list = []
             arg_loc_list = []
             arg_ty_list = []
@@ -211,11 +211,11 @@ class FuncOp(Op):
             while src.last_token() != ')':
                 if src.last_token() == ',':
                     src.drop_token()
-                arg_name = Op._variable_name_format.parse(src)
+                arg_name = cls._variable_name_format.parse(src)
                 src.drop_token(':')
                 arg_ty = mlir_type.parse_type(src)
                 if src.last_token() == 'loc':
-                    loc = Op._location_format.parse(src)
+                    loc = cls._location_format.parse(src)
                 else:
                     loc = None
 
@@ -242,8 +242,8 @@ class FuncOp(Op):
                 else:
                     op_result_names = []
 
-                op_name = Op._op_name_format.parse(src)
-                op_cls = Op.get_op_cls(op_name)
+                op_name = cls._op_name_format.parse(src)
+                op_cls = cls.get_op_cls(op_name)
                 op = op_cls.parse(src)
                 block.op_list.append(op)
 
