@@ -9,6 +9,9 @@ class Value:
     def __init__(self, ty: mlir_type.Type):
         self.ty = ty
 
+    def __hash__(self):
+        return id(self)
+
 
 class ConstantValue(Value, typing.Generic[T]):
     def __init__(self, ty: mlir_type.Type, value: T):

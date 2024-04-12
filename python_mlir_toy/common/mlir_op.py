@@ -1,3 +1,4 @@
+import sys
 import typing
 
 from python_mlir_toy.common import location, td, serializable, scoped_text_printer, mlir_type, scoped_text_parser, \
@@ -76,6 +77,7 @@ class Op(serializable.TextSerializable):
 
     _literal_format = formater.LiteralFormat()
     _location_format = formater.LocationFormat()
+    _type_format = formater.TypeFormat()
     _variable_name_format = formater.VariableNameFormat('%')
     _function_name_format = formater.VariableNameFormat('@')
     _results_name_format = formater.RepeatFormat(_variable_name_format, ', ')
@@ -165,9 +167,10 @@ class FuncOp(Op):
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
         with dst:
             dst.print(self.function_name, '(', sep='', end='')
-            for arg_name, arg_loc, arg_ty in tools.with_sep(
-                    zip(self.arg_name_list, self.arg_loc_list, self.function_type.inputs), (lambda: dst.print(', '))):
-                dst.insert_value_name(arg_ty, arg_name)
+            for arg_name, arg_loc, arg_ty, arg_value in tools.with_sep(
+                    zip(self.arg_name_list, self.arg_loc_list, self.function_type.inputs, self.blocks[0].arguments),
+                    (lambda: dst.print(', '))):
+                dst.insert_value_name(arg_value, arg_name)
                 dst.print(arg_name, ': ', sep='', end='')
                 arg_ty.print(dst)
                 if arg_loc is not None:
@@ -258,6 +261,10 @@ class ModuleOp(Op):
         self.module_name = module_name
         self.func_dict = func_dict
 
+    def dump(self):
+        printer = scoped_text_printer.ScopedTextPrinter(file=sys.stdout)
+        self.print(printer)
+
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
         with dst:
             dst.print('{', end='\n')
@@ -278,6 +285,7 @@ class ModuleOp(Op):
                 assert isinstance(func_op, FuncOp)
                 func_value = td.ConstantValue(func_op.function_type, func_op)
                 src.define_var(func_op.function_name, func_value)
+                func_dict[func_op.function_name] = func_op
 
             src.drop_token('}')
             loc = Op._location_format.parse(src)

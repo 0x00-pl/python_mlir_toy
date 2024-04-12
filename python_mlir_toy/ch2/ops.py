@@ -220,25 +220,26 @@ class ReturnOp(ToyOp, td.HasParent[ToyFuncOp]):
 class TransposeOp(ToyOp):
     op_name = 'toy.transpose'
 
-    class Format(formater.Format):
-        def __init__(self):
-            self.format_list = [formater.ConstantStrFormat('('), mlir_op.Op._variable_name_format,
-                                formater.ConstantStrFormat(':'), formater.TypeFormat(), formater.ConstantStrFormat(')'),
-                                formater.ConstantStrFormat(' to '), formater.TypeFormat(),
-                                formater.OptionalFormat(formater.LocationFormat(), (lambda loc: loc is not None),
-                                                        'loc')]
-
-        def print(self, obj, dst: serializable.TextPrinter):
-            for fmt in self.format_list:
-                fmt.print(obj, dst)
-
-        def parse(self, src: scoped_text_parser.ScopedTextParser):
-            _, operand_name, _, operand_type, _, _, result_type, loc = [item.parse(src) for item in self.format_list]
-            operand = src.lookup_var(operand_name)
-            assert operand is not None
-            return TransposeOp(loc, [1, 0], operand)
-
-    _format = Format()
+    # class Format(formater.Format):
+    #     def __init__(self):
+    #         self.format_list = [formater.ConstantStrFormat('('), mlir_op.Op._variable_name_format,
+    #                             formater.ConstantStrFormat(':'), formater.TypeFormat(), formater.ConstantStrFormat(')'),
+    #                             formater.ConstantStrFormat(' to '), formater.TypeFormat(),
+    #                             formater.OptionalFormat(formater.LocationFormat(), (lambda loc: loc is not None),
+    #                                                     'loc')]
+    #
+    #     def print(self, obj, dst: serializable.TextPrinter):
+    #         assert isinstance(obj, TransposeOp)
+    #         for fmt in self.format_list:
+    #             fmt.print(obj, dst)
+    #
+    #     def parse(self, src: scoped_text_parser.ScopedTextParser):
+    #         _, operand_name, _, operand_type, _, _, result_type, loc = [item.parse(src) for item in self.format_list]
+    #         operand = src.lookup_var(operand_name)
+    #         assert operand is not None
+    #         return TransposeOp(loc, [1, 0], operand)
+    #
+    # _format = Format()
 
     def __init__(self, loc: location.Location, permutation: List[int], operand: td.Value):
         if isinstance(operand.ty, mlir_type.RankedTensorType):
@@ -249,5 +250,27 @@ class TransposeOp(ToyOp):
         super().__init__(loc, operands=[operand], result_types=[result_type])
 
     @classmethod
-    def get_assembly_format(cls) -> Format:
-        return cls._format
+    def get_assembly_format(cls) -> formater.Format:
+        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
+            assert isinstance(obj, TransposeOp)
+            dst.print('(')
+            cls._variable_name_format.print(dst.lookup_value_name(obj.operands[0]), dst)
+            dst.print(':')
+            cls._type_format.print(obj.operands[0].ty, dst)
+            dst.print(')', ' to ')
+            cls._location_format.print(obj.location, dst)
+
+        def _parse_op(src: scoped_text_parser.ScopedTextParser):
+            src.drop_token('(')
+            operand_name = cls._variable_name_format.parse(src)
+            operand = src.lookup_var(operand_name)
+            assert operand is not None
+            src.drop_token(':')
+            operand_type = cls._type_format.parse(src)
+            assert operand.ty <= operand_type
+            src.drop_token(')')
+            src.drop_token('to')
+            loc = cls._location_format.parse(src)
+            return TransposeOp(loc, [1, 0], operand)
+
+        return formater.CustomFormat(_print_op, _parse_op)
