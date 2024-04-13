@@ -70,10 +70,7 @@ class NamespacedSymbolFormat(Format):
 
     def print(self, obj, dst: serializable.TextPrinter):
         assert isinstance(obj, str)
-        if self.end is None:
-            dst.print(obj)
-        else:
-            dst.print(obj, end=self.end)
+        dst.print(obj, end=self.end)
 
     def parse(self, src: serializable.TextParser):
         assert src.last_token_kind() == serializable.TokenKind.Identifier
@@ -89,13 +86,14 @@ class NamespacedSymbolFormat(Format):
 
 
 class VariableNameFormat(Format):
-    def __init__(self, prefix: str):
+    def __init__(self, prefix: str, end: str = None):
         self.prefix = prefix
+        self.end = end
 
     def print(self, obj, dst: serializable.TextPrinter):
         assert isinstance(obj, str)
         assert obj.startswith(self.prefix)
-        dst.print(obj)
+        dst.print(obj, end=self.end)
 
     def parse(self, src: serializable.TextParser):
         src.drop_token(self.prefix, skip_space=False)
@@ -166,8 +164,8 @@ class RepeatFormat(Format):
 
 
 class DictFormat(RepeatFormat):
-    def __init__(self, k_format: Format, v_format: Format,
-                 kv_sep: str | ConstantStrFormat = ':', item_sep: str | ConstantStrFormat = ','):
+    def __init__(self, k_format: Format, v_format: Format, kv_sep: str | ConstantStrFormat = ':',
+                 item_sep: str | ConstantStrFormat = ','):
         super().__init__(ListFormat([k_format, kv_sep, v_format]), item_sep)
 
     def print(self, obj, dst: serializable.TextPrinter):

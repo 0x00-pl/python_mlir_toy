@@ -56,11 +56,12 @@ class TensorLiteral(Literal):
 
     def print(self, dst: serializable.TextPrinter):
         dst.print(f'{self.name}<[', end='')
-        for value in tools.with_sep(self.values, lambda: dst.print(', ')):
+        for value in tools.with_sep(self.values, lambda: dst.print(',')):
             dst.print(value, end='')
         dst.print(']> : ', end='')
         ty = mlir_type.RankedF64TensorType(self.shape)
         ty.print(dst)
+        dst.print()
 
     @classmethod
     def parse(cls, src: serializable.TextParser):

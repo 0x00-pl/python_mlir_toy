@@ -15,7 +15,7 @@ class TypeFormat(formater.Format):
 
 
 class TypeListFormat(formater.Format):
-    def __init__(self, parentheses_required: bool, prefix: str | formater.ConstantStrFormat = ' : '):
+    def __init__(self, parentheses_required: bool, prefix: str | formater.ConstantStrFormat = ' :'):
         self.types_format = formater.RepeatFormat(TypeFormat(), ', ')
         self.prefix_format = formater.ConstantStrFormat(prefix) if isinstance(prefix, str) else prefix
         self.parentheses_required = parentheses_required
@@ -78,11 +78,11 @@ class Op(serializable.TextSerializable):
     _literal_format = formater.LiteralFormat()
     _location_format = formater.LocationFormat()
     _type_format = formater.TypeFormat()
-    _variable_name_format = formater.VariableNameFormat('%')
-    _function_name_format = formater.VariableNameFormat('@')
-    _results_name_format = formater.RepeatFormat(_variable_name_format, ', ')
+    _variable_name_format = formater.VariableNameFormat('%', end='')
+    _function_name_format = formater.VariableNameFormat('@', end='')
+    _results_name_format = formater.RepeatFormat(_variable_name_format, ',')
     _op_name_format = formater.NamespacedSymbolFormat()
-    _operands_format = formater.RepeatFormat(_variable_name_format, ', ')
+    _operands_format = formater.RepeatFormat(_variable_name_format, ',')
     _results_ty_format = TypeListFormat(parentheses_required=False)
 
     @staticmethod
@@ -118,6 +118,8 @@ class Op(serializable.TextSerializable):
             cls._operands_format.print(operand_names, dst)
             result_type_list = list(item.ty for item in obj.results)
             cls._results_ty_format.print(result_type_list, dst)
+            dst.print()
+            cls._location_format.print(obj.location, dst)
 
         def _parse_op(src: scoped_text_parser.ScopedTextParser):
             operand_names = cls._operands_format.parse(src)
@@ -193,11 +195,15 @@ class FuncOp(Op):
                 result_names = [dst.insert_value_and_generate_name(item) for item in op.results]
                 self._results_name_format.print(result_names, dst)
                 if len(result_names) > 0:
-                    dst.print('=')
+                    dst.print(' = ', end='')
                 op._op_name_format.print(op.op_name, dst)
                 op.print(dst)
-                dst.print(end='\n')
-            dst.print('}', end='\n')
+                dst.print_newline()
+
+        dst.print_ident()
+        dst.print('}')
+        self._location_format.print(self.location, dst)
+        dst.print_newline()
 
     @classmethod
     def parse(cls, src: scoped_text_parser.ScopedTextParser) -> typing.Self:
@@ -270,13 +276,16 @@ class ModuleOp(Op):
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
         with dst:
-            dst.print('{', end='\n')
+            dst.print('{', end='')
+            dst.print_newline()
             for func in self.func_dict.values():
                 assert isinstance(func, FuncOp)
                 dst.print_ident()
                 func._op_name_format.print(func.op_name, dst)
                 func.print(dst)
-            dst.print('}', end='')
+            dst.print('}')
+            self._location_format.print(self.location, dst)
+            dst.print_newline()
 
     @classmethod
     def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'ModuleOp':

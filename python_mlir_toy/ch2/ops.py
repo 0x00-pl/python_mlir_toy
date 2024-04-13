@@ -50,7 +50,7 @@ class GenericCallOp(ToyOp, mlir_op.Op):
         def _print_op(obj: GenericCallOp, dst: scoped_text_printer.ScopedTextPrinter):
             assert isinstance(obj, GenericCallOp)
             cls._function_name_format.print(obj.callee.function_name, dst)
-            dst.print('(')
+            dst.print('(', end='')
             operands_name = [dst.lookup_value_name(item) for item in obj.operands]
             cls._operands_format.print(operands_name, dst)
             dst.print(')', ':')
@@ -131,6 +131,7 @@ class PrintOp(ToyOp, mlir_op.Op):
             assert isinstance(obj, PrintOp)
             operand_name = dst.lookup_value_name(obj.operands[0])
             cls._variable_name_format.print(operand_name, dst)
+            dst.print()
             cls._location_format.print(obj.location, dst)
 
         def _parse_op(src: scoped_text_parser.ScopedTextParser):
@@ -144,6 +145,7 @@ class PrintOp(ToyOp, mlir_op.Op):
 
 class ReshapeOp(ToyOp, mlir_op.Op):
     op_name = 'toy.reshape'
+    _op_name_format = formater.NamespacedSymbolFormat(end='')
 
     def __init__(self, loc: location.Location, shape: List[int], operand: td.Value):
         super().__init__(loc, operands=[operand], result_types=[mlir_type.RankedF64TensorType(shape)])
@@ -153,10 +155,11 @@ class ReshapeOp(ToyOp, mlir_op.Op):
         def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
             operand_name = dst.lookup_value_name(obj.operands[0])
             assert operand_name is not None
-            dst.print('(', operand_name, ' : ')
+            dst.print('(', operand_name, ' : ', sep='', end='')
             obj.operands[0].ty.print(dst)
-            dst.print(')', ' to ')
+            dst.print(')', 'to')
             obj.results[0].ty.print(dst)
+            dst.print()
             cls._location_format.print(obj.location, dst)
 
         def _parse_op(src: scoped_text_parser.ScopedTextParser):
@@ -188,14 +191,17 @@ class ReturnOp(ToyOp, mlir_op.Op):
             if len(obj.operands) > 0:
                 operand_names = (dst.lookup_value_name(item) for item in obj.operands)
                 cls._operands_format.print(operand_names, dst)
-                result_type_list = list(item.ty for item in obj.results)
-                cls._results_ty_format.print(result_type_list, dst)
+                operand_type_list = list(item.ty for item in obj.operands)
+                cls._results_ty_format.print(operand_type_list, dst)
+                dst.print()
+            cls._location_format.print(obj.location, dst)
 
         def _parse_op(src: scoped_text_parser.ScopedTextParser):
             if src.last_token() == '%':
                 operand_name = cls._variable_name_format.parse(src)
                 operand = src.lookup_var(operand_name)
-                _ = cls._results_ty_format.parse(src)
+                operand_type_list = cls._results_ty_format.parse(src)
+                assert operand.ty <= operand_type_list[0]
             else:
                 operand = None
 
@@ -223,7 +229,7 @@ class TransposeOp(ToyOp, mlir_op.Op):
             assert isinstance(obj, TransposeOp)
             dst.print('(', end='')
             cls._variable_name_format.print(dst.lookup_value_name(obj.operands[0]), dst)
-            dst.print(':')
+            dst.print(' : ', end='')
             cls._type_format.print(obj.operands[0].ty, dst)
             dst.print(')', 'to')
             cls._type_format.print(obj.results[0].ty, dst)
