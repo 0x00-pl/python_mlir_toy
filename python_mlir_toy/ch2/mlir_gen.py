@@ -2,7 +2,7 @@ import typing
 
 from python_mlir_toy.ch1 import ast, lexer
 from python_mlir_toy.ch2 import ops
-from python_mlir_toy.common import location, mlir_type, td, mlir_op, scoped
+from python_mlir_toy.common import location, mlir_type, td, mlir_op, scoped, mlir_literal
 
 
 class MlirGenImpl:
@@ -76,12 +76,14 @@ class MlirGenImpl:
 
         block = mlir_op.Block(func_input_types)
         arg_name_list = []
+        arg_loc_list = []
 
         with self.symbol_table:
             for name_ast, argument_value in zip(func.proto.args, block.arguments):
                 assert isinstance(name_ast, ast.VariableExprAST)
                 self.symbol_table.insert(name_ast.name, argument_value)
-                arg_name_list.append((name_ast.name, self.location(name_ast.location)))
+                arg_name_list.append('%' + name_ast.name)
+                arg_loc_list.append(self.location(name_ast.location))
             self.mlir_gen_block(func.body, block.op_list)
 
         # fixme: assume no branch
@@ -91,8 +93,9 @@ class MlirGenImpl:
         else:
             func_output_types = []
 
+        func_name = '@' + func.proto.name
         func_type = mlir_type.FunctionType(func_input_types, func_output_types)
-        ret = ops.ToyFuncOp(loc, func.proto.name, arg_name_list, func_type, block)
+        ret = ops.ToyFuncOp(loc, func_name, arg_name_list, arg_loc_list, func_type, block)
         self.func_dict[func.proto.name] = ret
         return ret
 
@@ -122,15 +125,16 @@ class MlirGenImpl:
                 raise NotImplementedError('unknown literal type: %s' % type(x))
 
         flatten(literal)
-        ret = ops.ConstantOp(loc, literal.dims, values)
+
+        ret = ops.ConstantOp(loc, mlir_literal.DenseTensorLiteral(literal.dims, values))
         self.insert_op(ret)
         return ret
 
-    def mlir_gen_number(self, literal: ast.NumberExprAST):
-        loc = self.location(literal.location)
-        ret = ops.ConstantOp(loc, [], [literal.value])
-        self.insert_op(ret)
-        return ret
+    # def mlir_gen_number(self, literal: ast.NumberExprAST):
+    #     loc = self.location(literal.location)
+    #     ret = ops.ConstantOp(loc, [], [literal.value])
+    #     self.insert_op(ret)
+    #     return ret
 
     def mlir_gen_binary(self, binop: ast.BinaryExprAST):
         loc = self.location(binop.location)
