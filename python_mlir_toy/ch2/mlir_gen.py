@@ -113,18 +113,16 @@ class MlirGenImpl:
 
     def mlir_gen_literal(self, literal: ast.LiteralExprAST):
         loc = self.location(literal.location)
-        values = []
 
-        def flatten(x):
+        def to_array(x):
             if isinstance(x, ast.LiteralExprAST):
-                for item in x.values:
-                    flatten(item)
+                return [to_array(item) for item in x.values]
             elif isinstance(x, ast.NumberExprAST):
-                values.append(x.value)
+                return x.value
             else:
                 raise NotImplementedError('unknown literal type: %s' % type(x))
 
-        flatten(literal)
+        values = to_array(literal)
 
         ret = ops.ConstantOp(loc, mlir_literal.DenseTensorLiteral(literal.dims, values))
         self.insert_op(ret)
@@ -161,14 +159,19 @@ class MlirGenImpl:
     def mlir_gen_var_decl(self, decl: ast.VarDeclExprAST):
         loc = self.location(decl.location)
         var_decl_op = self.mlir_gen(decl.init_value)
-        self.symbol_table.insert(decl.name, self.op_to_value(var_decl_op))
-        if decl.var_type is None or decl.var_type.shape is None or len(decl.var_type.shape) == 0:
-            return var_decl_op
-        else:
-            shape = decl.var_type.shape
-            reshape_op = ops.ReshapeOp(loc, shape, self.op_to_value(var_decl_op))
-            self.insert_op(reshape_op)
-            return reshape_op
+        ret_op = var_decl_op
+
+        if isinstance(decl.init_value, ast.LiteralExprAST):
+            var_type = var_decl_op.literal.get_type()
+            if decl.var_type.shape is not None and len(decl.var_type.shape) != 0:
+                if not (isinstance(var_type, mlir_type.RankedTensorType) and var_type.shape == decl.var_type.shape):
+                    shape = decl.var_type.shape
+                    reshape_op = ops.ReshapeOp(loc, shape, self.op_to_value(var_decl_op))
+                    self.insert_op(reshape_op)
+                    ret_op = reshape_op
+
+        self.symbol_table.insert(decl.name, self.op_to_value(ret_op))
+        return ret_op
 
     def mlir_gen_print(self, p: ast.PrintExprAST):
         loc = self.location(p.location)

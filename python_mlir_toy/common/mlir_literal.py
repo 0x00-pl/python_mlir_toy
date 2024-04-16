@@ -63,19 +63,29 @@ class TensorLiteral(Literal):
         ty.print(dst)
         dst.print()
 
+    @staticmethod
+    def parse_tensor(src: serializable.TextParser):
+        result = []
+        src.drop_token('[')
+        while src.last_token() != ']':
+            if src.last_token() == ',':
+                src.drop_token()
+
+            if src.last_token() == '[':
+                result.append(TensorLiteral.parse_tensor(src))
+            else:
+                assert src.last_token_kind() == serializable.TokenKind.Number
+                result.append(float(src.last_token()))
+                src.drop_token()
+
+        src.drop_token(']')
+        return result
+
     @classmethod
     def parse(cls, src: serializable.TextParser):
         src.drop_token(cls.name)
         src.drop_token('<')
-        src.drop_token('[')
-        values = []
-        while src.last_token() != ']':
-            assert src.last_token_kind() == serializable.TokenKind.Number
-            values.append(float(src.last_token()))
-            src.drop_token()
-            if src.last_token() == ',':
-                src.drop_token()
-        src.drop_token(']')
+        values = cls.parse_tensor(src)
         src.drop_token('>')
         src.drop_token(':')
         ty = mlir_type.parse_type(src)
