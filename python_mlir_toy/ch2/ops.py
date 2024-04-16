@@ -42,7 +42,8 @@ class GenericCallOp(ToyOp, mlir_op.Op):
     def __init__(self, loc: location.Location, callee: ToyFuncOp, *inputs: td.Value):
         super().__init__(loc, operands=list(inputs), result_types=callee.function_type.outputs)
         self.callee = callee
-        # todo: verify callee input types
+        input_types = [item.ty for item in inputs]
+        self.function_type = mlir_type.FunctionType(input_types, callee.function_type.outputs)
         assert len(inputs) == len(callee.function_type.inputs)
 
     @classmethod
@@ -54,7 +55,7 @@ class GenericCallOp(ToyOp, mlir_op.Op):
             operands_name = [dst.lookup_value_name(item) for item in obj.operands]
             cls._operands_format.print(operands_name, dst)
             dst.print(')', ':')
-            obj.callee.function_type.print(dst)
+            obj.function_type.print(dst)
             cls._location_format.print(obj.location, dst)
 
         def _parse_op(src: scoped_text_parser.ScopedTextParser):
@@ -131,12 +132,17 @@ class PrintOp(ToyOp, mlir_op.Op):
             assert isinstance(obj, PrintOp)
             operand_name = dst.lookup_value_name(obj.operands[0])
             cls._variable_name_format.print(operand_name, dst)
+            dst.print(' : ', end='')
+            cls._type_format.print(obj.operands[0].ty, dst)
             dst.print()
             cls._location_format.print(obj.location, dst)
 
         def _parse_op(src: scoped_text_parser.ScopedTextParser):
             operand_name = cls._variable_name_format.parse(src)
             operand = src.lookup_var(operand_name)
+            src.drop_token(':')
+            ty = cls._type_format.parse(src)
+            assert operand.ty <= ty
             loc = cls._location_format.parse(src)
             return cls(loc, operand)
 
