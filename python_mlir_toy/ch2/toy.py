@@ -22,6 +22,7 @@ def build_arg_parser():
 
 
 def dump_ast(args):
+    assert args.input_file.name.endswith('.toy')
     lexer = LexerBuffer(args.input_file, args.input_file.name)
     parser = Parser(lexer)
     module_ast = parser.parse_module()
