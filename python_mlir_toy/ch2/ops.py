@@ -1,9 +1,8 @@
 import typing
 from typing import List, Optional
 
-from python_mlir_toy.common import td, location, mlir_type, serializable, mlir_op, formater, scoped_text_parser, \
+from python_mlir_toy.common import td, location, mlir_type, mlir_op, formater, scoped_text_parser, \
     scoped_text_printer, mlir_literal
-from python_mlir_toy.common.serializable import TextParser
 
 
 class ToyOp:
@@ -74,32 +73,14 @@ class GenericCallOp(ToyOp, mlir_op.Op):
 
         return formater.CustomFormat(_print_op, _parse_op)
 
-    def function_name_format(self):
-        def printer(dst: serializable.TextPrinter):
-            dst.print(self.callee.function_name)
-
-        def parser(src: TextParser):
-            raise NotImplementedError
-
-        return printer, parser
-
-    def function_type_format(self):
-        def printer(dst: serializable.TextPrinter):
-            self.callee.function_type.print(dst)
-
-        def parser(src: TextParser):
-            raise NotImplementedError
-
-        return printer, parser
-
 
 class AddOp(ToyOp, mlir_op.Op):
     op_name = 'toy.add'
 
     def __init__(self, loc: location.Location, lhs: td.Value, rhs: td.Value):
         super().__init__(loc, operands=[lhs, rhs], result_types=[mlir_type.F64TensorType()])
-        assert mlir_type.F64TensorType() <= lhs.ty
-        assert mlir_type.F64TensorType() <= rhs.ty
+        assert lhs.ty <= mlir_type.TensorType(mlir_type.Float64Type())
+        assert rhs.ty <= mlir_type.TensorType(mlir_type.Float64Type())
 
 
 class MulOp(ToyOp, mlir_op.Op):
