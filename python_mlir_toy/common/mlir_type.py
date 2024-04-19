@@ -80,29 +80,6 @@ class Float64Type(Type):
     name = 'f64'
 
 
-class ComplexType(Type):
-    name = 'complex'
-
-    def __init__(self, element_type: Type):
-        self.element_type = element_type
-
-    def __le__(self, other):
-        return super().__le__(other) and self.element_type == other.element_type
-
-    def print(self, dst: TextPrinter):
-        dst.print(f'complex<', end='')
-        self.element_type.print(dst)
-        dst.print('>', end='')
-
-    @classmethod
-    def parse(cls, src: TextParser):
-        src.drop_token('complex')
-        src.drop_token('<')
-        element_type = parse_type(src)
-        src.drop_token('>')
-        return cls(element_type)
-
-
 class TensorType(Type):
     def __init__(self, element_type: Type):
         self.element_type = element_type
@@ -122,9 +99,6 @@ class RankedTensorType(TensorType):
     def __init__(self, element_type: Type, shape: typing.List[int]):
         super().__init__(element_type)
         self.shape = shape
-
-    def is_dynamic_dim(self, idx):
-        return self.shape[idx] < 0
 
     def __le__(self, other):
         return super().__le__(other) and self.shape == other.shape
@@ -192,9 +166,15 @@ class FunctionType(Type):
             dst.print(')')
 
 
-def print_type_list(dst: TextPrinter, type_list: typing.List[Type], sep: str = ', '):
+def print_type_list(dst: TextPrinter, type_list: typing.List[Type], sep: str = ', ', parentheses_required: bool = False):
+    if parentheses_required or len(type_list) > 1:
+        dst.print('(', end='')
+
     for result_type in tools.with_sep(type_list, lambda: dst.print(sep)):
         result_type.print(dst)
+
+    if parentheses_required or len(type_list) > 1:
+        dst.print(')', end='')
 
 
 def parse_type_list(src: TextParser, sep: str = ','):

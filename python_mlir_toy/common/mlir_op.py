@@ -131,11 +131,20 @@ class Op(serializable.TextSerializable):
         return formater.CustomFormat(_print_op, _parse_op)
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        self.get_assembly_format().print(self, dst)
+        operand_names = (dst.lookup_value_name(item) for item in self.operands)
+        self._operands_format.print(operand_names, dst)
+        result_type_list = list(item.ty for item in self.results)
+        self._results_ty_format.print(result_type_list, dst)
+        dst.print()
+        self._location_format.print(self.location, dst)
 
     @classmethod
     def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'Op':
-        return cls.get_assembly_format().parse(src)
+        operand_names = cls._operands_format.parse(src)
+        operands = [src.lookup_var(operand_name) for operand_name in operand_names]
+        result_types = cls._results_ty_format.parse(src)
+        loc = cls._location_format.parse(src)
+        return cls.build_as_generic_op(loc, operands, result_types)
 
 
 class Block(serializable.TextSerializable):
