@@ -1,97 +1,21 @@
 import sys
 import typing
 
-from python_mlir_toy.common import location, td, serializable, scoped_text_printer, mlir_type, scoped_text_parser, \
-    formater, tools
-
-
-class TypeFormat(formater.Format):
-    def print(self, obj, dst: serializable.TextPrinter):
-        assert isinstance(obj, mlir_type.Type)
-        obj.print(dst)
-
-    def parse(self, src: serializable.TextParser):
-        return mlir_type.parse_type(src)
-
-
-class TypeListFormat(formater.Format):
-    def __init__(self, parentheses_required: bool, prefix: str | formater.ConstantStrFormat = ' :'):
-        self.types_format = formater.RepeatFormat(TypeFormat(), ', ')
-        self.prefix_format = formater.ConstantStrFormat(prefix) if isinstance(prefix, str) else prefix
-        self.parentheses_required = parentheses_required
-
-    def print(self, obj, dst: serializable.TextPrinter):
-        if obj is None:
-            return
-
-        assert isinstance(obj, list)
-        self.prefix_format.print(serializable.empty, dst)
-        if len(obj) != 1 or self.parentheses_required:
-            dst.print('(')
-            self.types_format.print(obj, dst)
-            dst.print(')')
-        else:
-            self.types_format.print(obj, dst)
-
-    def parse(self, src: serializable.TextParser) -> typing.List[typing.Any]:
-        if src.last_token() != self.prefix_format.text.strip():
-            return []
-
-        self.prefix_format.parse(src)
-        if src.last_token() == '(':
-            src.drop_token()
-            ret = self.types_format.parse(src)
-            src.drop_token(')')
-        else:
-            ret = self.types_format.parse(src)
-        return ret
-
-
-#
-#
-# class OpFormat(formater.Format):
-#     def __init__(self, op_cls: typing.Type['Op']):
-#         self.operands_format = formater.RepeatFormat(formater.VariableNameFormat('%'), ', ')
-#         self.results_ty_format = formater.OptionalFormat(
-#             formater.ListFormat([formater.ConstantStrFormat(' : '), TypeListFormat(parentheses_required=False)]),
-#             (lambda result_type_list: len(result_type_list) > 0), ':')
-#         self.op_cls = op_cls
-#
-#     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter):
-#         operand_names = (dst.lookup_value_name(item) for item in obj.operands)
-#         self.operands_format.print(operand_names, dst)
-#         result_type_list = list(item.ty for item in obj.results)
-#         self.results_ty_format.print(result_type_list, dst)
-#
-#     def parse(self, src: scoped_text_parser.ScopedTextParser):
-#         loc = location.FileLineColLocation(*src.get_location())
-#         operand_names = self.operands_format.parse(src)
-#         operands = [src.lookup_var(operand_name) for operand_name in operand_names]
-#         result_types = self.results_ty_format.parse(src)
-#         return self.op_cls(loc, operands, result_types)
+from python_mlir_toy.common import serializable, td, location, scoped_text_printer, scoped_text_parser, bounded_format, \
+    mlir_type
 
 
 class Op(serializable.TextSerializable):
     op_name: str = None
     op_type_dict: typing.Dict[str, typing.Type['Op']] = {}
 
-    _literal_format = formater.LiteralFormat()
-    _location_format = formater.LocationFormat()
-    _type_format = formater.TypeFormat()
-    _variable_name_format = formater.VariableNameFormat('%', end='')
-    _function_name_format = formater.VariableNameFormat('@', end='')
-    _results_name_format = formater.RepeatFormat(_variable_name_format, ',')
-    _op_name_format = formater.NamespacedSymbolFormat()
-    _operands_format = formater.RepeatFormat(_variable_name_format, ',')
-    _results_ty_format = TypeListFormat(parentheses_required=False)
-
     @staticmethod
-    def register_op_cls(name: str, op_type: typing.Type['Op']):
+    def register_op_cls(name: str, cls: typing.Type['Op']):
         assert name not in Op.op_type_dict
-        Op.op_type_dict[name] = op_type
+        Op.op_type_dict[name] = cls
 
     @staticmethod
-    def get_op_cls(op_name: str):
+    def get_op_cls(op_name: str) -> typing.Type['Op']:
         assert op_name in Op.op_type_dict
         return Op.op_type_dict[op_name]
 
@@ -99,223 +23,141 @@ class Op(serializable.TextSerializable):
         if cls.op_name is not None:
             Op.register_op_cls(cls.op_name, cls)
 
-    def __init__(self, loc: location.Location, operands: typing.List[td.Value] = None,
-                 result_types: typing.List[mlir_type.Type] = None, blocks: typing.List['Block'] = None):
-        self.location = loc
-        self.operands = operands if operands else []
-        self.results = [td.Value(ty) for ty in result_types] if result_types else []
-        self.blocks = blocks if blocks else []
+    def __init__(self, loc: location.Location):
+        self.loc = loc
+
+    def get_inputs(self) -> typing.List[td.Value]:
+        raise NotImplementedError('get_inputs is not implemented')
+
+    def get_outputs(self) -> typing.List[td.Value]:
+        raise NotImplementedError('get_outputs is not implemented')
 
     @classmethod
-    def build_as_generic_op(cls, loc: location.Location, operands: typing.List[td.Value] = None,
-                            result_types: typing.List[mlir_type.Type] = None, blocks: typing.List['Block'] = None):
-        return cls(loc, operands, result_types, blocks)
-
-    @classmethod
-    def get_assembly_format(cls) -> formater.Format:
-        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
-            operand_names = (dst.lookup_value_name(item) for item in obj.operands)
-            cls._operands_format.print(operand_names, dst)
-            result_type_list = list(item.ty for item in obj.results)
-            cls._results_ty_format.print(result_type_list, dst)
-            dst.print()
-            cls._location_format.print(obj.location, dst)
-
-        def _parse_op(src: scoped_text_parser.ScopedTextParser):
-            operand_names = cls._operands_format.parse(src)
-            operands = [src.lookup_var(operand_name) for operand_name in operand_names]
-            result_types = cls._results_ty_format.parse(src)
-            loc = cls._location_format.parse(src)
-            return cls.build_as_generic_op(loc, operands, result_types)
-
-        return formater.CustomFormat(_print_op, _parse_op)
+    def get_format_list(cls) -> typing.List[bounded_format.Format]:
+        raise NotImplementedError('get_format_list is not implemented')
 
     def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        operand_names = (dst.lookup_value_name(item) for item in self.operands)
-        self._operands_format.print(operand_names, dst)
-        result_type_list = list(item.ty for item in self.results)
-        self._results_ty_format.print(result_type_list, dst)
-        dst.print()
-        self._location_format.print(self.location, dst)
+        format_list = self.get_format_list()
+        for format_item in format_list:
+            format_item.print(self, dst)
 
     @classmethod
-    def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'Op':
-        operand_names = cls._operands_format.parse(src)
-        operands = [src.lookup_var(operand_name) for operand_name in operand_names]
-        result_types = cls._results_ty_format.parse(src)
-        loc = cls._location_format.parse(src)
-        return cls.build_as_generic_op(loc, operands, result_types)
+    def parse(cls, src: scoped_text_parser.ScopedTextParser):
+        format_list = cls.get_format_list()
+        attr_dict = {}
+        for format_item in format_list:
+            format_item.parse(attr_dict, src)
+        return cls(**attr_dict)
 
 
-class Block(serializable.TextSerializable):
-    def __init__(self, input_types=None):
-        self.arguments = [td.Value(ty) for ty in input_types] if input_types else []
-        self.op_list: typing.List[Op] = []
+class GeneralOp(Op):
+    def __init__(
+            self, loc: location.Location, inputs: typing.List[td.Value], output_types: typing.List[mlir_type.Type]
+    ):
+        super().__init__(loc=loc)
+        self.inputs = inputs
+        self.outputs = [td.Value(ty) for ty in output_types]
 
-    def add_ops(self, op_list: typing.List[Op]):
-        self.op_list.extend(op_list)
+    def get_inputs(self) -> typing.List[td.Value]:
+        return self.inputs
 
-    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        for op in self.op_list:
-            dst.print_ident()
-            op.print(dst)
+    def get_outputs(self) -> typing.List[td.Value]:
+        return self.outputs
+
+    @classmethod
+    def get_format_list(cls):
+        return [bounded_format.InputsFormat(), bounded_format.OutputsTypeFormat(), bounded_format.LocationFormat()]
+
+
+class BinaryOp(Op):
+    def __init__(
+            self, loc: location.Location, lhs: td.Value, rhs: td.Value, output_types: typing.List[mlir_type.Type] = None
+    ):
+        super().__init__(loc=loc)
+        self.lhs = lhs
+        self.rhs = rhs
+        assert lhs.ty == rhs.ty
+        self.output = td.Value(output_types[0] if output_types is not None else lhs.ty)
+        assert lhs.ty <= self.output.ty
+
+    def get_inputs(self) -> typing.List[td.Value]:
+        return [self.lhs, self.rhs]
+
+    def get_outputs(self) -> typing.List[td.Value]:
+        return [self.output]
+
+    @classmethod
+    def get_format_list(cls):
+        return [bounded_format.BoundedInputFormat('lhs'), bounded_format.ConstantStrFormat(','),
+                bounded_format.BoundedInputFormat('rhs'), bounded_format.OutputsTypeFormat(),
+                bounded_format.LocationFormat()]
 
 
 class FuncOp(Op):
     op_name = 'func'
 
-    def __init__(self, loc: location.Location, function_name: str, arg_name_list: typing.List[str],
-                 arg_loc_list: typing.List[location.Location | None] | None, function_type: mlir_type.FunctionType,
-                 block: Block):
-        super().__init__(loc, blocks=[block])
-        self.function_name = function_name
+    def __init__(
+            self, loc: location.Location, function_type: mlir_type.FunctionType, function_name: str,
+            argument_names: typing.List[str], argument_values: typing.List[td.Value],
+            argument_locs: typing.List[location.Location], body: typing.List[Op]
+    ):
+        super().__init__(loc=loc)
+        assert len(function_type.inputs) == len(argument_names)
+        assert len(argument_locs) == len(argument_names)
         self.function_type = function_type
-        self.arg_name_list = arg_name_list
-        self.arg_loc_list = arg_loc_list if arg_loc_list is not None else [None] * len(arg_name_list)
-        assert len(self.arg_name_list) == len(self.arg_loc_list)
-        assert len(self.arg_name_list) == len(self.function_type.inputs)
-
-    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        with dst:
-            dst.print(self.function_name, '(', sep='', end='')
-            for arg_name, arg_loc, arg_ty, arg_value in tools.with_sep(
-                    zip(self.arg_name_list, self.arg_loc_list, self.function_type.inputs, self.blocks[0].arguments),
-                    (lambda: dst.print(', ', end=''))):
-                dst.insert_value_name(arg_value, arg_name)
-                dst.print(arg_name, ': ', sep='', end='')
-                arg_ty.print(dst)
-                if arg_loc is not None:
-                    dst.print()
-                    arg_loc.print(dst)
-            dst.print(')')
-            if len(self.function_type.outputs) != 0:
-                dst.print('->')
-                if len(self.function_type.outputs) == 1:
-                    self.function_type.outputs[0].print(dst)
-                else:
-                    dst.print('(', end='')
-                    mlir_type.print_type_list(dst, self.function_type.outputs)
-                    dst.print(')')
-                dst.print()
-
-            dst.print('{', end='\n')
-            for op in self.blocks[0].op_list:
-                dst.print_ident()
-                result_names = [dst.insert_value_and_generate_name(item) for item in op.results]
-                self._results_name_format.print(result_names, dst)
-                if len(result_names) > 0:
-                    dst.print(' = ', end='')
-                op._op_name_format.print(op.op_name, dst)
-                op.print(dst)
-                dst.print_newline()
-
-        dst.print_ident()
-        dst.print('}')
-        self._location_format.print(self.location, dst)
-        dst.print_newline()
+        self.function_name = function_name
+        self.argument_names = argument_names
+        self.argument_locs = argument_locs
+        self.argument_values = argument_values
+        self.body = body
 
     @classmethod
-    def parse(cls, src: scoped_text_parser.ScopedTextParser) -> typing.Self:
-        with src:
-            function_name = cls._function_name_format.parse(src)
-            arg_name_list = []
-            arg_loc_list = []
-            arg_ty_list = []
-            output_ty_list = []
-            src.drop_token('(')
-            while src.last_token() != ')':
-                if src.last_token() == ',':
-                    src.drop_token()
-                arg_name = cls._variable_name_format.parse(src)
-                src.drop_token(':')
-                arg_ty = mlir_type.parse_type(src)
-                if src.last_token() == 'loc':
-                    loc = cls._location_format.parse(src)
-                else:
-                    loc = None
+    def get_format_list(cls):
+        return [bounded_format.FunctionDeclarationFormat(Op.get_op_cls), bounded_format.LocationFormat()]
 
-                arg_name_list.append(arg_name)
-                arg_loc_list.append(loc)
-                arg_ty_list.append(arg_ty)
-            src.drop_token(')')
-            if src.last_token() == '-':
-                src.drop_token('-')
-                src.drop_token('>')
-                output_ty_list = mlir_type.parse_type_list(src)
 
-            block = Block(arg_ty_list)
-            for name, value in zip(arg_name_list, block.arguments):
-                src.define_var(name, value)
+class GenericCallOp(Op):
+    op_name = 'generic_call'
 
-            function_type = mlir_type.FunctionType(arg_ty_list, output_ty_list)
+    def __init__(
+            self, loc: location.Location, callee: FuncOp, inputs: typing.List[td.Value],
+            callee_type: mlir_type.FunctionType = None
+    ):
+        super().__init__(loc=loc)
+        self.callee = callee
+        self.inputs = inputs
+        self.outputs = [td.Value(ty) for ty in callee.function_type.outputs]
+        assert len(inputs) == len(callee.function_type.inputs)
+        assert callee_type is None or callee.function_type <= callee_type
 
-            src.drop_token('{')
-            while src.last_token() != '}':
-                if src.last_token() == '%':
-                    op_result_names = Op._results_name_format.parse(src)
-                    src.drop_token('=')
-                else:
-                    op_result_names = []
+    def get_inputs(self) -> typing.List[td.Value]:
+        return self.inputs
 
-                op_name = cls._op_name_format.parse(src)
-                op_cls = cls.get_op_cls(op_name)
-                op = op_cls.parse(src)
-                block.op_list.append(op)
+    def get_outputs(self) -> typing.List[td.Value]:
+        return self.outputs
 
-                for name, value in zip(op_result_names, op.results):
-                    src.define_var(name, value)
-
-            src.drop_token('}')
-            loc = cls._location_format.parse(src)
-            return cls(loc, function_name, arg_name_list, arg_loc_list, function_type, block)
+    @classmethod
+    def get_format_list(cls):
+        return [bounded_format.CalleeFormat(), bounded_format.ConstantStrFormat('('), bounded_format.InputsFormat(),
+                bounded_format.ConstantStrFormat(')'), bounded_format.BoundedFunctionTypeFormat('callee'),
+                bounded_format.LocationFormat()]
 
 
 class ModuleOp(Op):
     op_name = 'module'
 
-    def __init__(self, loc: location.Location, module_name: str, func_dict: typing.Dict[str, Op]):
-        super().__init__(loc)
-        self.module_name = module_name
-        self.func_dict = func_dict
+    def __init__(self, loc: location.Location, body: typing.List[Op]):
+        super().__init__(loc=loc)
+        self.body = body
+
+    @classmethod
+    def get_format_list(cls):
+        return [bounded_format.ModuleDeclarationFormat(Op.get_op_cls), bounded_format.LocationFormat()]
 
     def dump(self):
         printer = scoped_text_printer.ScopedTextPrinter(file=sys.stdout)
-        self._op_name_format.print(self.op_name, printer)
         self.print(printer)
-
-    def print(self, dst: scoped_text_printer.ScopedTextPrinter):
-        with dst:
-            dst.print('{', end='')
-            dst.print_newline()
-            for func in self.func_dict.values():
-                assert isinstance(func, FuncOp)
-                dst.print_ident()
-                func._op_name_format.print(func.op_name, dst)
-                func.print(dst)
-            dst.print('}')
-            self._location_format.print(self.location, dst)
-            dst.print_newline()
-
-    @classmethod
-    def parse(cls, src: scoped_text_parser.ScopedTextParser) -> 'ModuleOp':
-        func_dict = {}
-        with src:
-            src.drop_token('{')
-            while src.last_token() != '}':
-                func_op_name = cls._op_name_format.parse(src)
-                func_cls = cls.get_op_cls(func_op_name)
-                func_op = func_cls.parse(src)
-                assert isinstance(func_op, FuncOp)
-                func_value = td.ConstantValue(func_op.function_type, func_op)
-                src.define_var(func_op.function_name, func_value)
-                func_dict[func_op.function_name] = func_op
-
-            src.drop_token('}')
-            loc = cls._location_format.parse(src)
-        return ModuleOp(loc, 'no_name', func_dict)
 
 
 def parse_module(src: scoped_text_parser.ScopedTextParser):
-    op_name = Op._op_name_format.parse(src)
-    assert op_name == 'module'
     return ModuleOp.parse(src)
