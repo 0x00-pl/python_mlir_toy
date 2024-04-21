@@ -43,4 +43,5 @@ def parse_location(src: serializable.TextParser):
     else:
         raise ValueError('Unknown location format')
 
+    src.drop_token(')')
     return ret

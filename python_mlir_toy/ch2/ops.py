@@ -1,241 +1,157 @@
 import typing
-from typing import List, Optional
+from typing import Optional
 
-from python_mlir_toy.common import td, location, mlir_type, mlir_op, formater, scoped_text_parser, \
-    scoped_text_printer, mlir_literal
+from python_mlir_toy.common import td, location, mlir_type, mlir_op, mlir_literal, bounded_format
 
 
 class ToyOp:
     pass
 
 
-class ConstantOp(ToyOp, mlir_op.Op):
+class ConstantOp(mlir_op.Op, ToyOp):
     op_name = 'toy.constant'
 
-    def __init__(self, loc: location.Location, literal: mlir_literal.Literal):
-        super().__init__(loc, result_types=[literal.get_type()])
+    def __init__(
+            self, loc: location.Location, literal: mlir_literal.Literal,
+            output_types: typing.List[mlir_type.Type] = None
+    ):
+        super().__init__(loc)
+        output_type = literal.get_type()
+        if output_types is not None:
+            assert len(output_types) == 1
+            assert output_type <= output_types[0]
         self.literal = literal
+        self.output = td.Value(output_type)
+
+    def get_inputs(self) -> typing.List[td.Value]:
+        return []
+
+    def get_outputs(self) -> typing.List[td.Value]:
+        return [self.output]
 
     @classmethod
-    def get_assembly_format(cls) -> formater.Format:
-        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
-            assert isinstance(obj, ConstantOp)
-            cls._literal_format.print(obj.literal, dst)
-            cls._location_format.print(obj.location, dst)
-
-        def _parse_op(src: scoped_text_parser.ScopedTextParser):
-            literal = cls._literal_format.parse(src)
-            loc = cls._location_format.parse(src)
-            return cls(loc, literal)
-
-        return formater.CustomFormat(_print_op, _parse_op)
+    def get_format_list(cls):
+        return [bounded_format.BoundedLiteralAttrFormat('literal'), bounded_format.OutputsTypeFormat(),
+                bounded_format.LocationFormat()]
 
 
-class ToyFuncOp(ToyOp, mlir_op.FuncOp):
+class ToyFuncOp(mlir_op.FuncOp, ToyOp):
     op_name = 'toy.func'
 
 
-class GenericCallOp(ToyOp, mlir_op.Op):
+class ToyGenericCallOp(mlir_op.GenericCallOp, ToyOp):
     op_name = 'toy.generic_call'
 
-    def __init__(self, loc: location.Location, callee: ToyFuncOp, *inputs: td.Value):
-        super().__init__(loc, operands=list(inputs), result_types=callee.function_type.outputs)
-        self.callee = callee
-        input_types = [item.ty for item in inputs]
-        self.function_type = mlir_type.FunctionType(input_types, callee.function_type.outputs)
-        assert len(inputs) == len(callee.function_type.inputs)
 
-    @classmethod
-    def get_assembly_format(cls) -> formater.Format:
-        def _print_op(obj: GenericCallOp, dst: scoped_text_printer.ScopedTextPrinter):
-            assert isinstance(obj, GenericCallOp)
-            cls._function_name_format.print(obj.callee.function_name, dst)
-            dst.print('(', end='')
-            operands_name = [dst.lookup_value_name(item) for item in obj.operands]
-            cls._operands_format.print(operands_name, dst)
-            dst.print(')', ':')
-            obj.function_type.print(dst)
-            cls._location_format.print(obj.location, dst)
-
-        def _parse_op(src: scoped_text_parser.ScopedTextParser):
-            callee_name = cls._function_name_format.parse(src)
-            callee_value = src.lookup_var(callee_name)
-            assert isinstance(callee_value, td.ConstantValue)
-            assert isinstance(callee_value.ty, mlir_type.FunctionType)
-            src.drop_token('(')
-            operands_name = cls._operands_format.parse(src)
-            operands = [src.lookup_var(operands_name) for operands_name in operands_name]
-            src.drop_token(')')
-            src.drop_token(':')
-            function_type = mlir_type.parse_function_type(src)
-            loc = cls._location_format.parse(src)
-            return cls(loc, callee_value.value, *operands)
-
-        return formater.CustomFormat(_print_op, _parse_op)
-
-
-class AddOp(ToyOp, mlir_op.Op):
+class AddOp(mlir_op.BinaryOp, ToyOp):
     op_name = 'toy.add'
 
-    def __init__(self, loc: location.Location, lhs: td.Value, rhs: td.Value):
-        super().__init__(loc, operands=[lhs, rhs], result_types=[mlir_type.F64TensorType()])
-        assert lhs.ty <= mlir_type.TensorType(mlir_type.Float64Type())
-        assert rhs.ty <= mlir_type.TensorType(mlir_type.Float64Type())
 
-
-class MulOp(ToyOp, mlir_op.Op):
+class MulOp(mlir_op.BinaryOp, ToyOp):
     op_name = 'toy.mul'
 
-    def __init__(self, loc: location.Location, lhs: td.Value, rhs: td.Value):
-        super().__init__(loc, operands=[lhs, rhs], result_types=[mlir_type.F64TensorType()])
-        assert mlir_type.F64TensorType() <= lhs.ty
-        assert mlir_type.F64TensorType() <= rhs.ty
 
-    @classmethod
-    def build_as_generic_op(cls, loc: location.Location, operands: typing.List[td.Value] = None,
-                            result_types: typing.List[mlir_type.Type] = None, blocks=None):
-        assert len(operands) == 2
-        assert len(result_types) == 1 or result_types is None
-        assert blocks is None
-        return cls(loc, operands[0], operands[1])
-
-
-class PrintOp(ToyOp, mlir_op.Op):
+class PrintOp(mlir_op.Op, ToyOp):
     op_name = 'toy.print'
 
-    def __init__(self, loc: location.Location, operand: td.Value):
-        super().__init__(loc, operands=[operand])
-        assert mlir_type.F64TensorType() <= operand.ty
+    def __init__(self, loc: location.Location, operand: td.Value, operand_type: mlir_type.Type = None):
+        super().__init__(loc)
+        self.operand = operand
+        assert operand_type is None or operand.ty <= operand_type
+
+    def get_inputs(self) -> typing.List[td.Value]:
+        return [self.operand]
+
+    def get_outputs(self) -> typing.List[td.Value]:
+        return []
 
     @classmethod
-    def get_assembly_format(cls) -> formater.Format:
-        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
-            assert isinstance(obj, PrintOp)
-            operand_name = dst.lookup_value_name(obj.operands[0])
-            cls._variable_name_format.print(operand_name, dst)
-            dst.print(' : ', end='')
-            cls._type_format.print(obj.operands[0].ty, dst)
-            dst.print()
-            cls._location_format.print(obj.location, dst)
-
-        def _parse_op(src: scoped_text_parser.ScopedTextParser):
-            operand_name = cls._variable_name_format.parse(src)
-            operand = src.lookup_var(operand_name)
-            src.drop_token(':')
-            ty = cls._type_format.parse(src)
-            assert operand.ty <= ty
-            loc = cls._location_format.parse(src)
-            return cls(loc, operand)
-
-        return formater.CustomFormat(_print_op, _parse_op)
+    def get_format_list(cls):
+        return [bounded_format.BoundedInputFormat('operand'), bounded_format.BoundedTypeFormat('operand'),
+                bounded_format.LocationFormat()]
 
 
-class ReshapeOp(ToyOp, mlir_op.Op):
+class ReshapeOp(mlir_op.Op, ToyOp):
     op_name = 'toy.reshape'
-    _op_name_format = formater.NamespacedSymbolFormat(end='')
 
-    def __init__(self, loc: location.Location, shape: List[int], operand: td.Value):
-        super().__init__(loc, operands=[operand], result_types=[mlir_type.RankedF64TensorType(shape)])
+    # _op_name_format = formater.NamespacedSymbolFormat(end='')
+
+    def __init__(
+            self, loc: location.Location, operand: td.Value, operand_type: mlir_type.Type = None,
+            output_type: mlir_type.Type = None
+    ):
+        super().__init__(loc)
+        self.operand = operand
+        assert isinstance(self.operand.ty, mlir_type.RankedTensorType)
+        assert operand_type is None or self.operand.ty <= operand_type
+        self.output = td.Value(output_type)
+
+    def get_inputs(self) -> typing.List[td.Value]:
+        return [self.operand]
+
+    def get_outputs(self) -> typing.List[td.Value]:
+        return [self.output]
 
     @classmethod
-    def get_assembly_format(cls) -> formater.Format:
-        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
-            operand_name = dst.lookup_value_name(obj.operands[0])
-            assert operand_name is not None
-            dst.print('(', operand_name, ' : ', sep='', end='')
-            obj.operands[0].ty.print(dst)
-            dst.print(')', 'to')
-            obj.results[0].ty.print(dst)
-            dst.print()
-            cls._location_format.print(obj.location, dst)
-
-        def _parse_op(src: scoped_text_parser.ScopedTextParser):
-            src.drop_token('(')
-            operand_name = cls._variable_name_format.parse(src)
-            operand = src.lookup_var(operand_name)
-            src.drop_token(':')
-            operand.ty.parse(src)
-            src.drop_token(')')
-            src.drop_token('to')
-            result_type = mlir_type.parse_type(src)
-            assert isinstance(result_type, mlir_type.RankedTensorType)
-            shape = result_type.shape
-            loc = cls._location_format.parse(src)
-            return cls(loc, shape, operand)
-
-        return formater.CustomFormat(_print_op, _parse_op)
+    def get_format_list(cls):
+        return [bounded_format.ConstantStrFormat('('), bounded_format.BoundedInputFormat('operand'),
+                bounded_format.BoundedTypeFormat('operand'), bounded_format.ConstantStrFormat(')'),
+                bounded_format.ConstantStrFormat('to'), bounded_format.BoundedTypeFormat('output', prefix=None),
+                bounded_format.LocationFormat()]
 
 
-class ReturnOp(ToyOp, mlir_op.Op):
+class ReturnOp(mlir_op.Op, ToyOp):
     op_name = 'toy.return'
 
-    def __init__(self, loc: location.Location, operand: Optional[td.Value] = None):
-        super().__init__(loc, operands=([operand]) if operand is not None else [])
+    def __init__(
+            self, loc: location.Location, operand: Optional[td.Value] = None,
+            operand_type: Optional[mlir_type.Type] = None
+    ):
+        super().__init__(loc)
+        self.operand = operand
+        assert operand_type is None or operand.ty <= operand_type
+
+    def get_inputs(self) -> typing.List[td.Value]:
+        return [self.operand] if self.operand is not None else []
+
+    def get_outputs(self) -> typing.List[td.Value]:
+        return []
 
     @classmethod
-    def get_assembly_format(cls) -> formater.Format:
-        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
-            if len(obj.operands) > 0:
-                operand_names = (dst.lookup_value_name(item) for item in obj.operands)
-                cls._operands_format.print(operand_names, dst)
-                operand_type_list = list(item.ty for item in obj.operands)
-                cls._results_ty_format.print(operand_type_list, dst)
-                dst.print()
-            cls._location_format.print(obj.location, dst)
-
-        def _parse_op(src: scoped_text_parser.ScopedTextParser):
-            if src.last_token() == '%':
-                operand_name = cls._variable_name_format.parse(src)
-                operand = src.lookup_var(operand_name)
-                operand_type_list = cls._results_ty_format.parse(src)
-                assert operand.ty <= operand_type_list[0]
-            else:
-                operand = None
-
-            loc = cls._location_format.parse(src)
-            return cls(loc, operand)
-
-        return formater.CustomFormat(_print_op, _parse_op)
+    def get_format_list(cls):
+        return [bounded_format.BoundedOptionalInputFormat('operand'), bounded_format.BoundedTypeFormat('operand'),
+                bounded_format.LocationFormat()]
 
 
-class TransposeOp(ToyOp, mlir_op.Op):
+class TransposeOp(mlir_op.Op, ToyOp):
     op_name = 'toy.transpose'
-    _op_name_format = formater.NamespacedSymbolFormat(end='')
 
-    def __init__(self, loc: location.Location, permutation: List[int], operand: td.Value):
+    def __init__(
+            self, loc: location.Location, operand: td.Value, operand_type: mlir_type.Type = None,
+            output_type: mlir_type.Type = None
+    ):
+        super().__init__(loc)
+        assert operand_type is None or operand.ty <= operand_type
         if isinstance(operand.ty, mlir_type.RankedTensorType):
-            shape = operand.ty.shape
-            result_type = mlir_type.RankedF64TensorType([shape[i] for i in permutation])
+            assert len(operand.ty.shape) >= 2
+            *shape, m2, m1 = operand.ty.shape
+            new_shape = [*shape, m1, m2]
+            result_type = mlir_type.RankedF64TensorType(new_shape)
         else:
             result_type = mlir_type.F64TensorType()
-        super().__init__(loc, operands=[operand], result_types=[result_type])
+        self.operand = operand
+        assert output_type is None or result_type <= output_type
+        self.output = td.Value(result_type)
+
+    def get_inputs(self) -> typing.List[td.Value]:
+        return [self.operand]
+
+    def get_outputs(self) -> typing.List[td.Value]:
+        return [self.output]
 
     @classmethod
-    def get_assembly_format(cls) -> formater.Format:
-        def _print_op(obj, dst: scoped_text_printer.ScopedTextPrinter):
-            assert isinstance(obj, TransposeOp)
-            dst.print('(', end='')
-            cls._variable_name_format.print(dst.lookup_value_name(obj.operands[0]), dst)
-            dst.print(' : ', end='')
-            cls._type_format.print(obj.operands[0].ty, dst)
-            dst.print(')', 'to')
-            cls._type_format.print(obj.results[0].ty, dst)
-            dst.print()
-            cls._location_format.print(obj.location, dst)
-
-        def _parse_op(src: scoped_text_parser.ScopedTextParser):
-            src.drop_token('(')
-            operand_name = cls._variable_name_format.parse(src)
-            operand = src.lookup_var(operand_name)
-            assert operand is not None
-            src.drop_token(':')
-            operand_type = cls._type_format.parse(src)
-            assert operand.ty <= operand_type
-            src.drop_token(')')
-            src.drop_token('to')
-            result_type = cls._type_format.parse(src)
-            assert isinstance(result_type, mlir_type.TensorType)
-            loc = cls._location_format.parse(src)
-            return TransposeOp(loc, [1, 0], operand)
-
-        return formater.CustomFormat(_print_op, _parse_op)
+    def get_format_list(cls):
+        return [bounded_format.ConstantStrFormat('('), bounded_format.BoundedInputFormat('operand'),
+                bounded_format.BoundedTypeFormat('operand'), bounded_format.ConstantStrFormat(')'),
+                bounded_format.ConstantStrFormat('to'), bounded_format.BoundedTypeFormat('output', prefix=None),
+                bounded_format.LocationFormat()]
