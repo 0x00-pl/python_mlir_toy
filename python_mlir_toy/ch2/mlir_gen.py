@@ -21,9 +21,10 @@ class MlirGenImpl:
 
     @staticmethod
     def op_to_value(op: mlir_op.Op) -> td.Value:
-        assert isinstance(op.results, list)
-        assert len(op.results) == 1
-        return op.results[0]
+        output_values = op.get_outputs()
+        assert isinstance(output_values, list)
+        assert len(output_values) == 1
+        return output_values[0]
 
     def mlir_gen(self, x):
         if isinstance(x, ast.ModuleAST):
@@ -53,7 +54,7 @@ class MlirGenImpl:
         for f in module.functions:
             self.mlir_gen_func(f)
 
-        root_module = mlir_op.ModuleOp(loc, 'unknown', self.func_dict)
+        root_module = mlir_op.ModuleOp(loc, list(self.func_dict.values()))
 
         # todo: verify module
 
@@ -64,7 +65,7 @@ class MlirGenImpl:
         for expr in block:
             self.mlir_gen(expr)
         if not isinstance(op_list[-1], ops.ReturnOp):
-            ret_op = ops.ReturnOp(op_list[-1].location)
+            ret_op = ops.ReturnOp(op_list[-1].loc)
             self.insert_op(ret_op)
         self.insert_point_list.pop(-1)
         return op_list
@@ -74,40 +75,40 @@ class MlirGenImpl:
 
         func_input_types = [mlir_type.F64TensorType() for _ in func.proto.args]
 
-        block = mlir_op.Block(func_input_types)
-        arg_name_list = []
-        arg_loc_list = []
+        arguments = [td.Value(ty) for ty in func_input_types]
+        op_list: typing.List[mlir_op.Op] = []
+        arg_name_list: typing.List[str] = []
+        arg_loc_list: typing.List[location.Location] = []
 
         with self.symbol_table:
-            for name_ast, argument_value in zip(func.proto.args, block.arguments):
+            for name_ast, argument_value in zip(func.proto.args, arguments):
                 assert isinstance(name_ast, ast.VariableExprAST)
                 self.symbol_table.insert(name_ast.name, argument_value)
                 arg_name_list.append('%' + name_ast.name)
                 arg_loc_list.append(self.location(name_ast.location))
-            self.mlir_gen_block(func.body, block.op_list)
+            self.mlir_gen_block(func.body, op_list)
 
         # fixme: assume no branch
-        if isinstance(block.op_list[-1], ops.ReturnOp):
-            result_op = block.op_list[-1]
-            func_output_types = [i.ty for i in result_op.operands]
+        if isinstance(op_list[-1], ops.ReturnOp):
+            result_op = op_list[-1]
+            func_output_types = [i.ty for i in result_op.get_inputs()]
         else:
             func_output_types = []
 
         func_name = '@' + func.proto.name
         func_type = mlir_type.FunctionType(func_input_types, func_output_types)
-        ret = ops.ToyFuncOp(loc, func_name, arg_name_list, arg_loc_list, func_type, block)
+        ret = ops.ToyFuncOp(loc, func_type, func_name, arg_name_list, arguments, arg_loc_list, op_list)
         self.func_dict[func.proto.name] = ret
         return ret
 
     def mlir_gen_call(self, call: ast.CallExprAST):
         loc = self.location(call.location)
         if call.callee == 'transpose':
-            permutation = [1, 0]
-            ret = ops.TransposeOp(loc, permutation, self.mlir_gen(call.args[0]))
+            ret = ops.TransposeOp(loc, self.mlir_gen(call.args[0]))
         else:
             callee = self.func_dict[call.callee]
             inputs = [self.mlir_gen(arg) for arg in call.args]
-            ret = ops.GenericCallOp(loc, callee, *inputs)
+            ret = ops.ToyGenericCallOp(loc, callee, inputs)
         self.insert_op(ret)
         return ret
 
@@ -128,18 +129,10 @@ class MlirGenImpl:
         self.insert_op(ret)
         return ret
 
-    # def mlir_gen_number(self, literal: ast.NumberExprAST):
-    #     loc = self.location(literal.location)
-    #     ret = ops.ConstantOp(loc, [], [literal.value])
-    #     self.insert_op(ret)
-    #     return ret
-
     def mlir_gen_binary(self, binop: ast.BinaryExprAST):
         loc = self.location(binop.location)
         lhs = self.op_to_value(self.mlir_gen(binop.lhs))
         rhs = self.op_to_value(self.mlir_gen(binop.rhs))
-        # assert isinstance(lhs, td.Value) and isinstance(lhs.ty, int)
-        # assert isinstance(rhs, td.Value) and isinstance(rhs.ty, int)
 
         if binop.op == '+':
             ret = ops.AddOp(loc, lhs, rhs)
@@ -166,7 +159,12 @@ class MlirGenImpl:
             if decl.var_type.shape is not None and len(decl.var_type.shape) != 0:
                 if not (isinstance(var_type, mlir_type.RankedTensorType) and var_type.shape == decl.var_type.shape):
                     shape = decl.var_type.shape
-                    reshape_op = ops.ReshapeOp(loc, shape, self.op_to_value(var_decl_op))
+                    literal_value = self.op_to_value(var_decl_op)
+                    assert isinstance(literal_value.ty, mlir_type.RankedTensorType)
+                    reshape_op = ops.ReshapeOp(
+                        loc, literal_value, literal_value.ty,
+                        mlir_type.RankedTensorType(literal_value.ty.element_type, shape)
+                    )
                     self.insert_op(reshape_op)
                     ret_op = reshape_op
 
