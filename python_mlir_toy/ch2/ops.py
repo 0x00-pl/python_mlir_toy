@@ -12,14 +12,10 @@ class ConstantOp(mlir_op.Op, ToyOp):
     op_name = 'toy.constant'
 
     def __init__(
-            self, loc: location.Location, literal: mlir_literal.Literal,
-            output_types: typing.List[mlir_type.Type] = None
+            self, loc: location.Location, literal: mlir_literal.Literal
     ):
         super().__init__(loc)
         output_type = literal.get_type()
-        if output_types is not None:
-            assert len(output_types) == 1
-            assert output_type <= output_types[0]
         self.literal = literal
         self.output = td.Value(output_type)
 
@@ -31,7 +27,7 @@ class ConstantOp(mlir_op.Op, ToyOp):
 
     @classmethod
     def get_format_list(cls):
-        return [bounded_format.BoundedLiteralAttrFormat('literal'), bounded_format.OutputsTypeFormat(),
+        return [bounded_format.BoundedLiteralAttrFormat('literal'),
                 bounded_format.LocationFormat()]
 
 

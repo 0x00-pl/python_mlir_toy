@@ -157,6 +157,7 @@ class ModuleOp(Op):
     def dump(self):
         printer = scoped_text_printer.ScopedTextPrinter(file=sys.stdout)
         self.print(printer)
+        printer.print_newline()
 
 
 def parse_module(src: scoped_text_parser.ScopedTextParser):

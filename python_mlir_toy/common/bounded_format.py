@@ -161,19 +161,23 @@ class InputsFormat(Format):
 
 
 class BoundedTypeFormat(Format):
-    def __init__(self, attr_name: str, prefix: str | None = ':'):
+    def __init__(self, attr_name: str, prefix: str | None = ':', end: str = ' '):
         self.attr_name = attr_name
         self.prefix = prefix
+        self.end = end
+        assert self.end is None or self.end.isspace()
 
     def print(self, op, dst: serializable.TextPrinter) -> None:
-        input_val = getattr(op, self.attr_name)
-        if input_val is not None:
+        value = getattr(op, self.attr_name)
+        if value is not None:
             if self.prefix is not None:
                 dst.print(self.prefix)
-            assert isinstance(input_val, td.Value)
-            input_type = input_val.ty
-            assert isinstance(input_type, mlir_type.Type)
-            input_type.print(dst)
+            assert isinstance(value, td.Value)
+            value_type = value.ty
+            assert isinstance(value_type, mlir_type.Type)
+            value_type.print(dst)
+            if self.end is not None:
+                dst.print(self.end)
 
     def parse(self, attr_dict: typing.Dict, src: serializable.TextParser) -> None:
         if self.prefix is not None:
@@ -260,8 +264,10 @@ class FunctionDeclarationFormat(Format):
             dst.print()
             if arg_loc is not None:
                 arg_loc.print(dst)
-        dst.print(')', '->')
-        mlir_type.print_type_list(dst, op.function_type.outputs, sep=',')
+        dst.print(')')
+        if len(op.function_type.outputs) > 0:
+            dst.print('->')
+            mlir_type.print_type_list(dst, op.function_type.outputs, sep=',')
 
         assert isinstance(op.body, typing.List)
         dst.print('{')
@@ -379,7 +385,6 @@ class ModuleDeclarationFormat(Format):
                 item.print(dst)
                 dst.print_newline()
         dst.print('}')
-        op.loc.print(dst)
 
     def parse(self, attr_dict: typing.Dict, src: scoped_text_parser.ScopedTextParser) -> None:
         src.drop_token('module')
