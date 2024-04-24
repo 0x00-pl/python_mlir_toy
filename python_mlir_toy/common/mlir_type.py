@@ -13,7 +13,7 @@ class Type(serializable.TextSerializable):
             Type.type_dict[cls.name] = cls
 
     def __le__(self, other):
-        return isinstance(other, type(self))
+        return isinstance(self, type(other))
 
     def __eq__(self, other):
         return other <= self <= other
@@ -101,7 +101,12 @@ class RankedTensorType(TensorType):
         self.shape = shape
 
     def __le__(self, other):
-        return super().__le__(other) and self.shape == other.shape
+        if isinstance(other, RankedTensorType):
+            return isinstance(self, type(other)) and self.shape == other.shape and self.element_type == other.element_type
+        elif type(other) == TensorType:
+            return self.element_type == other.element_type
+        else:
+            return False
 
     def print(self, dst: TextPrinter):
         dst.print('tensor<', end='')
@@ -150,6 +155,11 @@ class FunctionType(Type):
         self.inputs = inputs
         self.outputs = outputs
 
+    def __le__(self, other):
+        return isinstance(other, FunctionType) and all(
+            input_ty <= other_input_ty for input_ty, other_input_ty in zip(self.inputs, other.inputs)
+        )
+
     def print(self, dst: TextPrinter):
         dst.print('(', end='')
         for input_ty in tools.with_sep(self.inputs, lambda: dst.print(',')):
@@ -166,7 +176,9 @@ class FunctionType(Type):
             dst.print(')')
 
 
-def print_type_list(dst: TextPrinter, type_list: typing.List[Type], sep: str = ', ', parentheses_required: bool = False):
+def print_type_list(
+        dst: TextPrinter, type_list: typing.List[Type], sep: str = ', ', parentheses_required: bool = False
+):
     if parentheses_required or len(type_list) > 1:
         dst.print('(', end='')
 

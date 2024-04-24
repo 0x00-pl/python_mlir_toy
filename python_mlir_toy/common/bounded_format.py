@@ -213,23 +213,24 @@ class OutputsTypeFormat(Format):
         attr_dict['output_types'] = output_types
 
 
-class BoundedFunctionTypeFormat(Format):
-    def __init__(self, attr_name: str, prefix: str = None):
-        self.prefix = prefix or ':'
-        self.attr_name = attr_name
+class CalleeFunctionTypeFormat(Format):
+    def __init__(self,):
+        self.prefix = ':'
 
     def print(self, op, dst: serializable.TextPrinter) -> None:
         if self.prefix is not None:
             dst.print(self.prefix)
-        func = getattr(op, self.attr_name)
+        func = op.callee
         assert isinstance(func.function_type, mlir_type.FunctionType)
-        func.function_type.print(dst)
+        new_func_input_types = [value.ty for value in op.get_inputs()]
+        new_func_type = mlir_type.FunctionType(new_func_input_types, func.function_type.outputs)
+        new_func_type.print(dst)
 
     def parse(self, attr_dict: typing.Dict, src: serializable.TextParser) -> None:
         if src.last_token() == self.prefix.strip():
             src.drop_token()
             function_type = mlir_type.parse_function_type(src)
-            attr_dict[self.attr_name + '_type'] = function_type
+            attr_dict['callee_type'] = function_type
 
 
 class LocationFormat(Format):
@@ -376,11 +377,12 @@ class ModuleDeclarationFormat(Format):
     def __init__(self, op_builder):
         self.op_builder = op_builder
 
-    def print(self, op, dst: serializable.TextPrinter) -> None:
+    def print(self, op, dst: scoped_text_printer.ScopedTextPrinter) -> None:
         dst.print('module {')
         dst.print_newline()
         with dst:
             for item in op.body:
+                dst.print_ident()
                 dst.print(item.op_name)
                 item.print(dst)
                 dst.print_newline()

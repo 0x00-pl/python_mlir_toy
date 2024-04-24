@@ -128,7 +128,7 @@ class GenericCallOp(Op):
         self.inputs = inputs
         self.outputs = [td.Value(ty) for ty in callee.function_type.outputs]
         assert len(inputs) == len(callee.function_type.inputs)
-        assert callee_type is None or callee.function_type <= callee_type
+        assert callee_type is None or callee_type <= callee.function_type
 
     def get_inputs(self) -> typing.List[td.Value]:
         return self.inputs
@@ -139,7 +139,7 @@ class GenericCallOp(Op):
     @classmethod
     def get_format_list(cls):
         return [bounded_format.CalleeFormat(), bounded_format.ConstantStrFormat('('), bounded_format.InputsFormat(),
-                bounded_format.ConstantStrFormat(')'), bounded_format.BoundedFunctionTypeFormat('callee'),
+                bounded_format.ConstantStrFormat(')'), bounded_format.CalleeFunctionTypeFormat(),
                 bounded_format.LocationFormat()]
 
 
