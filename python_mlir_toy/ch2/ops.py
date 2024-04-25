@@ -27,8 +27,7 @@ class ConstantOp(mlir_op.Op, ToyOp):
 
     @classmethod
     def get_format_list(cls):
-        return [bounded_format.BoundedLiteralAttrFormat('literal'),
-                bounded_format.LocationFormat()]
+        return [bounded_format.BoundedLiteralAttrFormat('literal'), bounded_format.LocationFormat()]
 
 
 class ToyFuncOp(mlir_op.FuncOp, ToyOp):
@@ -63,12 +62,13 @@ class PrintOp(mlir_op.Op, ToyOp):
 
     @classmethod
     def get_format_list(cls):
-        return [bounded_format.BoundedInputFormat('operand'), bounded_format.BoundedTypeFormat('operand'),
+        return [bounded_format.BoundedInputFormat('operand'), bounded_format.BoundedTypeFormat('operand', prefix=':'),
                 bounded_format.LocationFormat()]
 
 
 class ReshapeOp(mlir_op.Op, ToyOp):
     op_name = 'toy.reshape'
+    op_name_suffix: str = ''
 
     # _op_name_format = formater.NamespacedSymbolFormat(end='')
 
@@ -90,9 +90,9 @@ class ReshapeOp(mlir_op.Op, ToyOp):
 
     @classmethod
     def get_format_list(cls):
-        return [bounded_format.ConstantStrFormat('('), bounded_format.BoundedInputFormat('operand'),
-                bounded_format.BoundedTypeFormat('operand'), bounded_format.ConstantStrFormat(')'),
-                bounded_format.ConstantStrFormat('to'), bounded_format.BoundedTypeFormat('output', prefix=None),
+        return [bounded_format.ConstantStrFormat('(', end=''), bounded_format.BoundedInputFormat('operand'),
+                bounded_format.BoundedTypeFormat('operand', prefix=':', end=''), bounded_format.ConstantStrFormat(')'),
+                bounded_format.ConstantStrFormat('to'), bounded_format.BoundedTypeFormat('output'),
                 bounded_format.LocationFormat()]
 
 
@@ -115,12 +115,13 @@ class ReturnOp(mlir_op.Op, ToyOp):
 
     @classmethod
     def get_format_list(cls):
-        return [bounded_format.BoundedOptionalInputFormat('operand'), bounded_format.BoundedTypeFormat('operand'),
+        return [bounded_format.BoundedInputFormat('operand'), bounded_format.BoundedTypeFormat('operand', prefix=':'),
                 bounded_format.LocationFormat()]
 
 
 class TransposeOp(mlir_op.Op, ToyOp):
     op_name = 'toy.transpose'
+    op_name_suffix: str = ''
 
     def __init__(
             self, loc: location.Location, operand: td.Value, operand_type: mlir_type.Type = None,
@@ -147,7 +148,7 @@ class TransposeOp(mlir_op.Op, ToyOp):
 
     @classmethod
     def get_format_list(cls):
-        return [bounded_format.ConstantStrFormat('('), bounded_format.BoundedInputFormat('operand'),
-                bounded_format.BoundedTypeFormat('operand'), bounded_format.ConstantStrFormat(')'),
-                bounded_format.ConstantStrFormat('to'), bounded_format.BoundedTypeFormat('output', prefix=None),
+        return [bounded_format.ConstantStrFormat('(', end=''), bounded_format.BoundedInputFormat('operand'),
+                bounded_format.BoundedTypeFormat('operand', prefix=':', end=''), bounded_format.ConstantStrFormat(')'),
+                bounded_format.ConstantStrFormat('to'), bounded_format.BoundedTypeFormat('output'),
                 bounded_format.LocationFormat()]

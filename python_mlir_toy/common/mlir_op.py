@@ -7,6 +7,7 @@ from python_mlir_toy.common import serializable, td, location, scoped_text_print
 
 class Op(serializable.TextSerializable):
     op_name: str = None
+    op_name_suffix: str = ' '
     op_type_dict: typing.Dict[str, typing.Type['Op']] = {}
 
     @staticmethod
@@ -66,7 +67,8 @@ class GeneralOp(Op):
 
     @classmethod
     def get_format_list(cls):
-        return [bounded_format.InputsFormat(), bounded_format.OutputsTypeFormat(), bounded_format.LocationFormat()]
+        return [bounded_format.InputsFormat(), bounded_format.OutputsTypeFormat(prefix=':'),
+                bounded_format.LocationFormat()]
 
 
 class BinaryOp(Op):
@@ -88,8 +90,8 @@ class BinaryOp(Op):
 
     @classmethod
     def get_format_list(cls):
-        return [bounded_format.BoundedInputFormat('lhs'), bounded_format.ConstantStrFormat(','),
-                bounded_format.BoundedInputFormat('rhs'), bounded_format.OutputsTypeFormat(),
+        return [bounded_format.BoundedInputFormat('lhs', end=''), bounded_format.ConstantStrFormat(','),
+                bounded_format.BoundedInputFormat('rhs'), bounded_format.OutputsTypeFormat(prefix=':', end=' '),
                 bounded_format.LocationFormat()]
 
 
@@ -138,9 +140,9 @@ class GenericCallOp(Op):
 
     @classmethod
     def get_format_list(cls):
-        return [bounded_format.CalleeFormat(), bounded_format.ConstantStrFormat('('), bounded_format.InputsFormat(),
-                bounded_format.ConstantStrFormat(')'), bounded_format.CalleeFunctionTypeFormat(),
-                bounded_format.LocationFormat()]
+        return [bounded_format.CalleeFormat(), bounded_format.ConstantStrFormat('(', end=''),
+                bounded_format.InputsFormat(), bounded_format.ConstantStrFormat(')'),
+                bounded_format.CalleeFunctionTypeFormat(), bounded_format.LocationFormat()]
 
 
 class ModuleOp(Op):

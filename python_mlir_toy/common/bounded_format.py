@@ -28,26 +28,28 @@ class Format:
 
 
 class ConstantStrFormat(Format):
-    def __init__(self, text: str):
+    def __init__(self, text: str, end: str = None):
         self.text = text
+        self.end = end
 
     def print(self, obj, dst: serializable.TextPrinter) -> None:
-        dst.print(self.text)
+        dst.print(self.text, end=self.end)
 
     def parse(self, attr_dict, src: serializable.TextParser) -> None:
         src.drop_token(check_token=self.text.strip())
 
 
 class BoundedStrFormat(Format):
-    def __init__(self, attr_name: str, prefix: str = None):
+    def __init__(self, attr_name: str, prefix: str = None, end: str = None):
         self.attr_name = attr_name
         self.prefix = prefix
+        self.end = end
 
     def print(self, op, dst: serializable.TextPrinter) -> None:
         value = getattr(op, self.attr_name)
         assert isinstance(value, str)
         if self.prefix is not None:
-            dst.print(self.prefix, end='')
+            dst.print(self.prefix, end=self.end)
         dst.print(value)
 
     def parse(self, attr_dict, src: serializable.TextParser) -> None:
@@ -57,7 +59,7 @@ class BoundedStrFormat(Format):
         attr_dict[self.attr_name] = value
 
 
-class BoundedNumberAttrFormat(Format):
+class BoundedNumberFormat(Format):
     def __init__(self, attr_name: str):
         self.attr_name = attr_name
 
@@ -86,31 +88,32 @@ class BoundedLiteralAttrFormat(Format):
         attr_dict[self.attr_name] = value
 
 
+# class BoundedInputFormat(Format):
+#     def __init__(self, attr_name: str):
+#         self.attr_name = attr_name
+#
+#     def print(self, op, dst: scoped_text_printer.ScopedTextPrinter) -> None:
+#         input_val = getattr(op, self.attr_name)
+#         assert isinstance(input_val, td.Value)
+#         input_name = dst.lookup_value_name(input_val)
+#         assert isinstance(input_name, str)
+#         assert input_name.startswith('%')
+#         dst.print(input_name, end='')
+#
+#     def parse(self, attr_dict: typing.Dict, src: scoped_text_parser.ScopedTextParser) -> None:
+#         src.drop_token('%', skip_space=False)
+#         variable_name = str(src.last_token())
+#         src.drop_token()
+#         input_name = '%' + variable_name
+#         input_val = src.lookup_var(input_name)
+#         assert input_val is not None
+#         attr_dict[self.attr_name] = input_val
+
+
 class BoundedInputFormat(Format):
-    def __init__(self, attr_name: str):
+    def __init__(self, attr_name: str, end: str = None):
         self.attr_name = attr_name
-
-    def print(self, op, dst: scoped_text_printer.ScopedTextPrinter) -> None:
-        input_val = getattr(op, self.attr_name)
-        assert isinstance(input_val, td.Value)
-        input_name = dst.lookup_value_name(input_val)
-        assert isinstance(input_name, str)
-        assert input_name.startswith('%')
-        dst.print(input_name, end='')
-
-    def parse(self, attr_dict: typing.Dict, src: scoped_text_parser.ScopedTextParser) -> None:
-        src.drop_token('%', skip_space=False)
-        variable_name = str(src.last_token())
-        src.drop_token()
-        input_name = '%' + variable_name
-        input_val = src.lookup_var(input_name)
-        assert input_val is not None
-        attr_dict[self.attr_name] = input_val
-
-
-class BoundedOptionalInputFormat(Format):
-    def __init__(self, attr_name: str):
-        self.attr_name = attr_name
+        self.end = end
 
     def print(self, op, dst: scoped_text_printer.ScopedTextPrinter) -> None:
         input_val = getattr(op, self.attr_name)
@@ -119,7 +122,7 @@ class BoundedOptionalInputFormat(Format):
             input_name = dst.lookup_value_name(input_val)
             assert isinstance(input_name, str)
             assert input_name.startswith('%')
-            dst.print(input_name, end='')
+            dst.print(input_name, end=self.end)
 
     def parse(self, attr_dict, src: scoped_text_parser.ScopedTextParser) -> None:
         if src.last_token() == '%':
@@ -135,7 +138,7 @@ class BoundedOptionalInputFormat(Format):
 class InputsFormat(Format):
     def print(self, obj, dst: scoped_text_printer.ScopedTextPrinter) -> None:
         inputs = obj.get_inputs()
-        for input_val in tools.with_sep(inputs, sep=lambda: dst.print(', ')):
+        for input_val in tools.with_sep(inputs, sep=lambda: dst.print(',')):
             assert isinstance(input_val, td.Value)
             input_name = dst.lookup_value_name(input_val)
             assert input_name is not None
@@ -161,11 +164,11 @@ class InputsFormat(Format):
 
 
 class BoundedTypeFormat(Format):
-    def __init__(self, attr_name: str, prefix: str | None = ':', end: str = ' '):
+    def __init__(self, attr_name: str, prefix: str = None, end: str = ' '):
         self.attr_name = attr_name
         self.prefix = prefix
         self.end = end
-        assert self.end is None or self.end.isspace()
+        assert self.end is None or self.end == '' or self.end.isspace()
 
     def print(self, op, dst: serializable.TextPrinter) -> None:
         value = getattr(op, self.attr_name)
@@ -177,7 +180,7 @@ class BoundedTypeFormat(Format):
             assert isinstance(value_type, mlir_type.Type)
             value_type.print(dst)
             if self.end is not None:
-                dst.print(self.end)
+                dst.print(end=self.end)
 
     def parse(self, attr_dict: typing.Dict, src: serializable.TextParser) -> None:
         if self.prefix is not None:
@@ -191,9 +194,10 @@ class BoundedTypeFormat(Format):
 
 
 class OutputsTypeFormat(Format):
-    def __init__(self, prefix: str | None = ':', sep: str = None, parentheses_required: bool = False):
+    def __init__(self, prefix: str = None, sep: str = ',', end: str = None, parentheses_required: bool = False):
         self.prefix = prefix
-        self.sep = sep or ','
+        self.sep = sep
+        self.end = end
         self.parentheses_required = parentheses_required
 
     def print(self, op, dst: serializable.TextPrinter) -> None:
@@ -201,6 +205,8 @@ class OutputsTypeFormat(Format):
             dst.print(self.prefix)
         results_type = [item.ty for item in op.get_outputs()]
         mlir_type.print_type_list(dst, results_type, self.sep, self.parentheses_required)
+        if self.end is not None:
+            dst.print(end=self.end)
 
     def parse(self, attr_dict: typing.Dict, src: serializable.TextParser) -> None:
         if self.prefix is not None:
@@ -214,7 +220,7 @@ class OutputsTypeFormat(Format):
 
 
 class CalleeFunctionTypeFormat(Format):
-    def __init__(self,):
+    def __init__(self, ):
         self.prefix = ':'
 
     def print(self, op, dst: serializable.TextPrinter) -> None:
@@ -252,7 +258,7 @@ class FunctionDeclarationFormat(Format):
         assert isinstance(op.function_type, mlir_type.FunctionType)
         dst.insert_value_name(op, op.function_name)
 
-        dst.print(op.function_name)
+        dst.print(op.function_name, end='')
         dst.print('(', end='')
         for arg_name, arg_type, arg_loc in tools.with_sep(
                 zip(op.argument_names, op.function_type.inputs, op.argument_locs), lambda: dst.print(',')
@@ -269,9 +275,10 @@ class FunctionDeclarationFormat(Format):
         if len(op.function_type.outputs) > 0:
             dst.print('->')
             mlir_type.print_type_list(dst, op.function_type.outputs, sep=',')
+            dst.print()
 
         assert isinstance(op.body, typing.List)
-        dst.print('{')
+        dst.print('{', end='')
         dst.print_newline()
         with dst:
             for arg_name, arg_value in zip(op.argument_names, op.argument_values):
@@ -285,7 +292,7 @@ class FunctionDeclarationFormat(Format):
                         dst.print(output_name, end='')
 
                     dst.print(' = ', end='')
-                dst.print(item.op_name)
+                dst.print(item.op_name, end=item.op_name_suffix)
                 item.print(dst)
                 dst.print_newline()
 
@@ -363,7 +370,7 @@ class CalleeFormat(Format):
         callee = obj.callee
         callee_name = dst.lookup_value_name(callee)
         assert callee_name.startswith('@')
-        dst.print(callee_name)
+        dst.print(callee_name, end='')
 
     def parse(self, attr_dict: typing.Dict, src: scoped_text_parser.ScopedTextParser) -> None:
         src.drop_token('@', skip_space=False)
@@ -378,7 +385,7 @@ class ModuleDeclarationFormat(Format):
         self.op_builder = op_builder
 
     def print(self, op, dst: scoped_text_printer.ScopedTextPrinter) -> None:
-        dst.print('module {')
+        dst.print('module {', end='')
         dst.print_newline()
         with dst:
             for item in op.body:
